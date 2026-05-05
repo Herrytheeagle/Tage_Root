@@ -1,2 +1,6 @@
 # Tage_Root
 TAGE: SOLUTION TO BRIDGE PROBLEM AND THE PRICING OF BITCOIN-DENOMINATED YIELD. Trust-Minimised Execution Infrastructure in BTCFi 
+
+Bitcoin's base layer was designed for settlement finality, not programmable finance. Its UTXO model, constrained scripting language, and deliberate absence of native smart contract execution have made it the most secure and decentralised monetary network in existence and simultaneously the least capable of natively generating yield or supporting staking mechanics. This paper investigates the structural reasons why Bitcoin-denominated yield cannot be trustlessly produced on-chain at Layer 1, characterises the trust assumptions embedded in existing off-chain solutions, and proposes a framework for a trust-minimised Layer 2 execution environment capable of supporting staking, lending, and yield generation while preserving Bitcoin's security guarantees. We reference relevant Bitcoin Improvement Proposals (BIPs)  including BIP-340, BIP-341, BIP-342, BIP-119, and the prospective BIP-300/301 as architectural primitives for such a system, and conclude with a recommended implementation path for a BTCFi Layer 2 stack called Tage.
+
+Key teams : BTCFi, Tage, Bitcoin yield, staking, Layer 2, trust-minimised bridge, BIP-119, Taproot, OP_CTV, BitVM, covenant scripting 
