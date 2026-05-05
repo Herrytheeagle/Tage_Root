@@ -1,0 +1,51 @@
+[package]
+name        = "tage"
+version     = "0.1.0"
+edition     = "2021"
+description = "Trust-minimised BTCFi Layer 2 execution infrastructure — bridge, covenant, staking, and yield engine"
+authors     = ["Heritage Falodun and Ojo Samson"]
+license     = "MIT"
+repository  = "https://github.com/Herrytheeagle/Tage_Root"
+readme      = "README.md"
+keywords    = ["bitcoin", "btcfi", "tage", "layer2", "defi", "covenant"]
+categories  = ["cryptography::cryptocurrencies", "finance"]
+
+[dependencies]
+# SHA-256 / RIPEMD-160 for script hashing and TXID computation
+sha2        = "0.10"
+ripemd      = "0.1"
+
+# Constant-time hex encoding / decoding
+hex         = "0.4"
+
+# Serialisation — used for transaction and script encoding
+serde       = { version = "1.0", features = ["derive"] }
+serde_json  = "1.0"
+
+# Arbitrary-precision arithmetic for satoshi amounts and script integers
+num-bigint  = "0.4"
+num-traits  = "0.2"
+
+# Error handling
+thiserror   = "1.0"
+anyhow      = "1.0"
+
+# Logging
+log         = "0.4"
+env_logger  = "0.11"
+
+# Timestamps and duration helpers
+chrono      = { version = "0.4", features = ["serde"] }
+
+[dev-dependencies]
+# Property-based testing
+proptest    = "1.0"
+
+[[bin]]
+name = "tage"
+path = "src/main.rs"
+
+[profile.release]
+opt-level   = 3
+lto         = true
+codegen-units = 1
