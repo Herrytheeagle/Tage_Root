@@ -41,7 +41,7 @@
 use serde::{Deserialize, Serialize};
 use crate::{
     error::{BtcFiError, Result},
-    types::{Amount, BlockHeight, Hash256, OutPoint, Script, TxId},
+    types::{BlockHeight, Hash256, OutPoint},
     utils::hash::sha256d,
 };
 

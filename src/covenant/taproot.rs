@@ -261,14 +261,20 @@ impl TaprootBuilder {
         let tweak = taptweak_hash(&self.internal_key.0, &merkle_root_bytes);
 
         // Derive output key: Q = P + t·G
-        // NOTE: In production, replace this with a proper secp256k1 point
-        // addition.  Here we use XOR as a placeholder to keep the crate
-        // dependency-light for the research/reference context.
-        let mut output_key_bytes = [0u8; 32];
-        for i in 0..32 {
-            output_key_bytes[i] = self.internal_key.0[i] ^ tweak.0[i];
-        }
-        let output_key = XOnlyPubKey(output_key_bytes);
+        let internal_pk = secp256k1::XOnlyPublicKey::from_slice(&self.internal_key.0)
+            .map_err(|_| BtcFiError::InvalidTaprootKey {
+                reason: "Invalid internal key".into(),
+            })?;
+        let tweak_scalar = secp256k1::Scalar::from_be_bytes(tweak.0)
+            .map_err(|_| BtcFiError::InvalidTaprootKey {
+                reason: "Invalid tweak scalar".into(),
+            })?;
+        let secp = secp256k1::Secp256k1::new();
+        let (output_key, _parity) = internal_pk.add_tweak(&secp, &tweak_scalar)
+            .map_err(|_| BtcFiError::InvalidTaprootKey {
+                reason: "Tweak addition failed".into(),
+            })?;
+        let output_key = XOnlyPubKey(output_key.serialize());
 
         Ok(TaprootOutput {
             output_key,

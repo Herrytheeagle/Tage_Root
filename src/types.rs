@@ -197,6 +197,18 @@ impl fmt::Display for Hash256 {
     }
 }
 
+// ── Address ───────────────────────────────────────────────────────────────────
+
+/// An L2 address (20 bytes).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Address(pub [u8; 20]);
+
+impl Address {
+    pub fn zero() -> Self {
+        Address([0u8; 20])
+    }
+}
+
 // ── OutPoint ──────────────────────────────────────────────────────────────────
 
 /// A reference to a specific output within a transaction.
@@ -221,6 +233,69 @@ impl fmt::Display for OutPoint {
 pub struct TxOutput {
     pub value:  Amount,
     pub script: Script,
+}
+
+// ── U256 ─────────────────────────────────────────────────────────────────────
+
+/// A 256-bit unsigned integer for L2 arithmetic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct U256(pub [u8; 32]);
+
+impl U256 {
+    pub fn zero() -> Self {
+        U256([0u8; 32])
+    }
+
+    pub fn one() -> Self {
+        let mut bytes = [0u8; 32];
+        bytes[31] = 1;
+        U256(bytes)
+    }
+
+    pub fn as_usize(&self) -> usize {
+        // Convert last 8 bytes to usize
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(&self.0[24..32]);
+        usize::from_be_bytes(bytes)
+    }
+
+    pub fn to_bytes_be(&self) -> [u8; 32] {
+        let mut bytes = self.0;
+        bytes.reverse(); // Convert to big-endian
+        bytes
+    }
+}
+
+impl std::ops::Add for U256 {
+    type Output = Self;
+    fn add(self, _rhs: Self) -> Self {
+        // Simple addition (placeholder)
+        self
+    }
+}
+
+impl std::ops::Sub for U256 {
+    type Output = Self;
+    fn sub(self, _rhs: Self) -> Self {
+        // Simple subtraction (placeholder)
+        self
+    }
+}
+
+impl std::ops::Mul for U256 {
+    type Output = Self;
+    fn mul(self, _rhs: Self) -> Self {
+        // Simple multiplication (placeholder)
+        self
+    }
+}
+
+impl std::ops::Div for U256 {
+    type Output = Self;
+    fn div(self, _rhs: Self) -> Self {
+        // Simple division (placeholder)
+        self
+    }
 }
 
 // ── DepositStatus ─────────────────────────────────────────────────────────────

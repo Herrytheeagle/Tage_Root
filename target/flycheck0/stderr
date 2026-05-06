@@ -1,5 +1,0 @@
-error: can't find bin `tage` at path `/Users/user/Tage_Root/src/main.rs`
- --> /Users/user/Tage_Root/Cargo.toml
-error: can't find bin `tage` at path `/Users/user/Tage_Root/src/main.rs`
- --> /Users/user/Tage_Root/Cargo.toml
-error: could not compile due to 2 previous target resolution errors

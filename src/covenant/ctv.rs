@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     error::{BtcFiError, Result},
     types::{Amount, BlockHeight, Hash256, Script, TxOutput},
-    utils::hash::{ctv_template_hash, hash_outputs, hash_sequences, sha256d},
+    utils::hash::{ctv_template_hash, hash_outputs, hash_sequences},
 };
 
 // ── Opcode constant ───────────────────────────────────────────────────────────

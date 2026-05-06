@@ -308,6 +308,18 @@ impl ValidatorRegistry {
         self.validators.get_mut(&pubkey.to_string())
     }
 
+    /// Look up a validator by public key.
+    pub fn get_validator(&self, pubkey: &XOnlyPubKey) -> Option<&Validator> {
+        self.get(pubkey)
+    }
+
+    /// Remove a validator from the registry.
+    pub fn remove_validator(&mut self, pubkey: &XOnlyPubKey) -> Result<Validator> {
+        let key = pubkey.to_string();
+        self.validators.remove(&key)
+            .ok_or_else(|| BtcFiError::UnknownValidator { pubkey: key })
+    }
+
     /// Count of currently active validators.
     pub fn active_count(&self) -> usize {
         self.validators.values().filter(|v| v.is_eligible()).count()

@@ -37,6 +37,13 @@ env_logger  = "0.11"
 # Timestamps and duration helpers
 chrono      = { version = "0.4", features = ["serde"] }
 
+# Bitcoin cryptography and types
+bitcoin = { version = "0.31", features = ["serde"] }
+secp256k1 = { version = "0.29", features = ["serde"] }
+
+# Bitcoin RPC client for node connectivity
+bitcoincore-rpc = "0.18"
+
 [dev-dependencies]
 # Property-based testing
 proptest    = "1.0"

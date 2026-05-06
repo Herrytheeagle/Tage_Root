@@ -40,28 +40,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     error::{BtcFiError, Result},
     types::{Amount, BlockHeight},
+    yield_engine::interest_rate::*,
 };
-
-// ── Rate constants ────────────────────────────────────────────────────────────
-
-/// Interest rate at 0% utilisation (annual basis points).
-/// 50 bp = 0.50% APR.
-pub const RATE_AT_ZERO_UTIL_BPS: u64 = 50;
-
-/// Interest rate at optimal utilisation (annual basis points).
-/// 500 bp = 5.00% APR.
-pub const RATE_AT_OPTIMAL_UTIL_BPS: u64 = 500;
-
-/// Interest rate at 100% utilisation (annual basis points).
-/// 10_000 bp = 100% APR — very high to deter full utilisation.
-pub const RATE_AT_MAX_UTIL_BPS: u64 = 10_000;
-
-/// Target utilisation ratio in basis points.
-/// 8_000 = 80% — above this the rate climbs steeply.
-pub const OPTIMAL_UTILISATION_BPS: u64 = 8_000;
-
-/// Bitcoin blocks per year (10-minute average block time).
-pub const BLOCKS_PER_YEAR: u64 = 52_560;
 
 // ── Position ──────────────────────────────────────────────────────────────────
 
@@ -151,28 +131,13 @@ impl LendingPool {
     ///
     /// Utilisation U = total_borrows / total_deposits (clamped to [0, 10_000]).
     pub fn utilisation_bps(&self) -> u64 {
-        if self.total_deposits == 0 {
-            return 0;
-        }
-        (self.total_borrows * 10_000 / self.total_deposits).min(10_000)
+        utilisation_bps(self.total_borrows, self.total_deposits)
     }
 
     /// Current borrow rate in annual basis points, derived from the two-slope
     /// interest rate model described in the module header.
     pub fn borrow_rate_bps(&self) -> u64 {
-        let u = self.utilisation_bps();
-        if u <= OPTIMAL_UTILISATION_BPS {
-            // Slope 1: linear from r0 to r*
-            RATE_AT_ZERO_UTIL_BPS
-                + u * (RATE_AT_OPTIMAL_UTIL_BPS - RATE_AT_ZERO_UTIL_BPS)
-                    / OPTIMAL_UTILISATION_BPS
-        } else {
-            // Slope 2: linear from r* to rM above optimal utilisation
-            RATE_AT_OPTIMAL_UTIL_BPS
-                + (u - OPTIMAL_UTILISATION_BPS)
-                    * (RATE_AT_MAX_UTIL_BPS - RATE_AT_OPTIMAL_UTIL_BPS)
-                    / (10_000 - OPTIMAL_UTILISATION_BPS)
-        }
+        borrow_rate_bps(self.utilisation_bps())
     }
 
     /// Current supply (deposit) rate in annual basis points.
@@ -180,16 +145,7 @@ impl LendingPool {
     /// Supply rate = borrow_rate * utilisation — the pool distributes borrower
     /// interest proportionally to the share of capital that is deployed.
     pub fn supply_rate_bps(&self) -> u64 {
-        self.borrow_rate_bps() * self.utilisation_bps() / 10_000
-    }
-
-    /// Per-block accrual rate from an annual basis-point rate.
-    fn per_block_rate(annual_bps: u64) -> u64 {
-        // annual_bps / (BLOCKS_PER_YEAR * 10_000) expressed in units of
-        // 1e-12 to preserve precision without floating point.
-        // Full formula: per_block_factor = 1 + annual_bps / (10_000 * BLOCKS_PER_YEAR)
-        // We use integer arithmetic:  new_value = old * (1 + r/N) ≈ old + old*r/N
-        annual_bps
+        supply_rate_bps(self.borrow_rate_bps(), self.utilisation_bps())
     }
 
     // ── Deposits ────────────────────────────────────────────────────────────
@@ -254,6 +210,9 @@ impl LendingPool {
     ) -> Result<Amount> {
         self.accrue_interest(current_height);
 
+        let rate     = self.exchange_rate();
+        let sats_out = shares * rate / 1_000_000;
+
         let pos = self.lenders.get_mut(depositor)
             .ok_or_else(|| BtcFiError::DepositNotFound { txid: depositor.into() })?;
 
@@ -263,9 +222,6 @@ impl LendingPool {
                 available: pos.shares,
             });
         }
-
-        let rate     = self.exchange_rate();
-        let sats_out = shares * rate / 1_000_000;
 
         // Check the pool has enough liquid BTC (not all lent out).
         let available = self.total_deposits - self.total_borrows;

@@ -31,7 +31,7 @@ Layer 2 execution stack described in the Tage research paper. It covers:
 
 ---
 
-## Background: Why This Exists
+## Why This Exists
 
 Bitcoin's base layer was deliberately designed for settlement finality, not
 programmable finance. Its UTXO model and constrained scripting language make

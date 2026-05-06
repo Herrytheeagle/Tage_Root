@@ -154,7 +154,10 @@ impl PegInManager {
         // Build the sequencer-update CTV template.
         // The sequencer can spend this output into a new state-commitment UTXO
         // that carries the same value (minus its operating fee).
-        let sequencer_output_script = Script(vec![0x51]); // placeholder P2TR
+        let sequencer_output_script = TaprootBuilder::new(NUMS_KEY)
+            .build()
+            .unwrap()
+            .script_pubkey();
         let sequencer_tmpl = CtvTemplate {
             nversion:    2,
             nlocktime:   0,
@@ -173,7 +176,10 @@ impl PegInManager {
         // After EXIT_TIMELOCK_BLOCKS the user can claim back their BTC without
         // the sequencer.  The nlocktime is set to the absolute exit height so
         // that the spending tx is only valid at or after that height.
-        let user_script = Script(vec![0x51]); // placeholder: user's P2TR address
+        let user_script = TaprootBuilder::new(NUMS_KEY)
+            .build()
+            .unwrap()
+            .script_pubkey();
         let user_exit_tmpl = CtvTemplate {
             nversion:    2,
             nlocktime:   exit_height.0,

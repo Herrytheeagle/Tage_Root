@@ -101,6 +101,46 @@ pub enum BtcFiError {
     #[error("Unknown validator: {pubkey}")]
     UnknownValidator { pubkey: String },
 
+    // ── Execution / VM ────────────────────────────────────────────────────────
+    #[error("VM stack underflow")]
+    VmStackUnderflow,
+
+    #[error("VM invalid opcode: {opcode}")]
+    VmInvalidOpcode { opcode: u8 },
+
+    #[error("VM invalid jump destination: {dest}")]
+    VmInvalidJumpDestination { dest: usize },
+
+    #[error("VM division by zero")]
+    VmDivisionByZero,
+
+    #[error("VM memory out of bounds")]
+    VmMemoryOutOfBounds,
+
+    // ── Peg-out ───────────────────────────────────────────────────────────────
+    #[error("Peg-out not found: {txid}")]
+    PegOutNotFound { txid: String },
+
+    #[error("Peg-out not confirmed: {blocks_remaining} blocks remaining")]
+    PegOutNotConfirmed { blocks_remaining: u32 },
+
+    #[error("Emergency exit timelock: {blocks_remaining} blocks remaining")]
+    EmergencyExitTimelock { blocks_remaining: u32 },
+
+    // ── Validator ─────────────────────────────────────────────────────────────
+    #[error("Validator not found")]
+    ValidatorNotFound,
+
+    // ── Script ────────────────────────────────────────────────────────────────
+    #[error("Invalid public key")]
+    InvalidPublicKey,
+
+    #[error("Invalid multisig parameters")]
+    InvalidMultisigParams,
+
+    #[error("Invalid script")]
+    InvalidScript,
+
     // ── General ───────────────────────────────────────────────────────────────
     /// Wraps any standard I/O errors (file loading, socket reads, etc.).
     #[error("I/O error: {0}")]
