@@ -5,11 +5,23 @@
 // Handles the release of BTC from the bridge back to Bitcoin mainnet.
 // Implements the exit path for trust-minimised bridging (L2).
 
+use bitcoin::{
+    absolute::LockTime,
+    Amount as BtcAmount,
+    blockdata::{
+        script::{Builder, ScriptBuf},
+        transaction::{OutPoint as BtcOutPoint, Transaction as BtcTransaction, TxIn, TxOut, Version},
+    },
+    hashes::Hash,
+    secp256k1::XOnlyPublicKey as BtcXOnlyPublicKey,
+    Sequence,
+    Txid as BtcTxid,
+    Witness,
+};
 use serde::{Deserialize, Serialize};
 use crate::{
     error::{BtcFiError, Result},
     types::{Amount, BlockHeight, Hash256, OutPoint, TxId, XOnlyPubKey},
-    utils::hash::sha256d,
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -120,15 +132,50 @@ impl PegOutManager {
 
     /// Create the mainnet peg-out transaction.
     fn create_mainnet_tx(&self, request: &PegOutRequest) -> Result<TxId> {
-        // TODO: Construct actual Bitcoin transaction
-        // For now, return a placeholder txid
-        let mut data = Vec::new();
-        data.extend_from_slice(&request.deposit_outpoint.txid.0);
-        data.extend_from_slice(&request.amount.0.to_le_bytes());
-        data.extend_from_slice(&request.recipient.0);
-        let txid = sha256d(&data);
+        let tx = self.build_unsigned_tx(request, request.recipient)?;
+        Ok(TxId(tx.txid().to_byte_array()))
+    }
 
-        Ok(TxId(txid.0))
+    fn build_unsigned_tx(&self, request: &PegOutRequest, recipient: XOnlyPubKey) -> Result<BtcTransaction> {
+        if request.amount.0 < Amount::DUST_P2TR.0 {
+            return Err(BtcFiError::BelowDustThreshold {
+                amount: request.amount.0,
+                threshold: Amount::DUST_P2TR.0,
+            });
+        }
+
+        let prev_txid = BtcTxid::from_byte_array(request.deposit_outpoint.txid.0);
+        let outpoint = BtcOutPoint {
+            txid: prev_txid,
+            vout: request.deposit_outpoint.vout,
+        };
+
+        let script_pubkey = self.build_p2tr_script(recipient)?;
+
+        Ok(BtcTransaction {
+            version: Version::non_standard(2),
+            lock_time: LockTime::from_consensus(0),
+            input: vec![TxIn {
+                previous_output: outpoint,
+                script_sig: ScriptBuf::new(),
+                sequence: Sequence::MAX,
+                witness: Witness::new(),
+            }],
+            output: vec![TxOut {
+                value: BtcAmount::from_sat(request.amount.0),
+                script_pubkey,
+            }],
+        })
+    }
+
+    fn build_p2tr_script(&self, recipient: XOnlyPubKey) -> Result<ScriptBuf> {
+        let xonly = BtcXOnlyPublicKey::from_slice(&recipient.0)
+            .map_err(|_| BtcFiError::InvalidPublicKey)?;
+
+        Ok(Builder::new()
+            .push_int(1)
+            .push_slice(&xonly.serialize())
+            .into_script())
     }
 
     /// Emergency exit for stuck deposits.
@@ -158,14 +205,8 @@ impl PegOutManager {
     }
 
     fn create_emergency_tx(&self, request: &PegOutRequest, recipient: XOnlyPubKey) -> Result<TxId> {
-        // TODO: Construct emergency transaction
-        let mut data = Vec::new();
-        data.extend_from_slice(b"emergency");
-        data.extend_from_slice(&request.deposit_outpoint.txid.0);
-        data.extend_from_slice(&recipient.0);
-        let txid = sha256d(&data);
-
-        Ok(TxId(txid.0))
+        let tx = self.build_unsigned_tx(request, recipient)?;
+        Ok(TxId(tx.txid().to_byte_array()))
     }
 }
 
