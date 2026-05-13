@@ -5,13 +5,13 @@
 // Global state trie for shared L2 state across all modules.
 // Implements the shared global state required for cross-protocol composability.
 
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use crate::{
     error::Result,
     types::{Address, Hash256, U256},
     utils::hash::sha256d,
 };
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // ── State Trie ────────────────────────────────────────────────────────────────
 
@@ -36,7 +36,10 @@ impl StateTrie {
 
     /// Read a storage slot.
     pub fn get(&self, address: &Address, slot: &U256) -> U256 {
-        self.storage.get(&(*address, *slot)).copied().unwrap_or(U256::zero())
+        self.storage
+            .get(&(*address, *slot))
+            .copied()
+            .unwrap_or(U256::zero())
     }
 
     /// Write a storage slot.

@@ -31,12 +31,12 @@
 // Research paper §4.2: "BIP-119: OP_CHECKTEMPLATEVERIFY (CTV)"
 // Research paper §5.2: "Proposed Architecture"
 
-use serde::{Deserialize, Serialize};
 use crate::{
     error::{BtcFiError, Result},
     types::{Amount, BlockHeight, Hash256, Script, TxOutput},
     utils::hash::{ctv_template_hash, hash_outputs, hash_sequences},
 };
+use serde::{Deserialize, Serialize};
 
 // ── Opcode constant ───────────────────────────────────────────────────────────
 
@@ -210,7 +210,7 @@ impl CtvBridgeTemplate {
     /// committed sequencer-update hash; returns `Err(CtvTemplateMismatch)` if not.
     pub fn verify_sequencer_spend(&self, proposal: &CtvTemplate) -> Result<()> {
         let expected = self.sequencer_update.hash();
-        let got      = proposal.hash();
+        let got = proposal.hash();
         if expected != got {
             return Err(BtcFiError::CtvTemplateMismatch {
                 expected: expected.to_string(),
@@ -226,18 +226,22 @@ impl CtvBridgeTemplate {
     /// # Arguments
     /// * `proposal`       — The template implied by the spending transaction.
     /// * `current_height` — The block height at which the spend is being evaluated.
-    pub fn verify_user_exit(&self, proposal: &CtvTemplate, current_height: BlockHeight) -> Result<()> {
+    pub fn verify_user_exit(
+        &self,
+        proposal: &CtvTemplate,
+        current_height: BlockHeight,
+    ) -> Result<()> {
         // 1. Check that the timelock has elapsed.
         if !current_height.is_past(self.exit_after_height) {
             return Err(BtcFiError::TimelockNotExpired {
                 current: current_height.0,
-                unlock:  self.exit_after_height.0,
+                unlock: self.exit_after_height.0,
             });
         }
 
         // 2. Verify the template hash matches the committed exit template.
         let expected = self.user_exit.hash();
-        let got      = proposal.hash();
+        let got = proposal.hash();
         if expected != got {
             return Err(BtcFiError::CtvTemplateMismatch {
                 expected: expected.to_string(),
@@ -276,7 +280,7 @@ mod tests {
 
     fn dummy_output(sats: u64) -> TxOutput {
         TxOutput {
-            value:  Amount(sats),
+            value: Amount(sats),
             script: Script(vec![0x51]), // OP_TRUE placeholder
         }
     }
@@ -284,12 +288,12 @@ mod tests {
     #[test]
     fn template_hash_is_deterministic() {
         let tmpl = CtvTemplate {
-            nversion:    2,
-            nlocktime:   0,
-            sequences:   vec![0xffff_fffe],
-            outputs:     vec![dummy_output(99_000)],
+            nversion: 2,
+            nlocktime: 0,
+            sequences: vec![0xffff_fffe],
+            outputs: vec![dummy_output(99_000)],
             input_index: 0,
-            label:       None,
+            label: None,
         };
         assert_eq!(tmpl.hash(), tmpl.hash(), "CTV hash must be deterministic");
     }
@@ -297,19 +301,20 @@ mod tests {
     #[test]
     fn template_hash_changes_with_output_value() {
         let base = CtvTemplate {
-            nversion:    2,
-            nlocktime:   0,
-            sequences:   vec![0xffff_fffe],
-            outputs:     vec![dummy_output(100_000)],
+            nversion: 2,
+            nlocktime: 0,
+            sequences: vec![0xffff_fffe],
+            outputs: vec![dummy_output(100_000)],
             input_index: 0,
-            label:       None,
+            label: None,
         };
         let modified = CtvTemplate {
             outputs: vec![dummy_output(99_000)], // 1000 sat fee deducted
             ..base.clone()
         };
         assert_ne!(
-            base.hash(), modified.hash(),
+            base.hash(),
+            modified.hash(),
             "Different output values must produce different CTV hashes"
         );
     }
@@ -317,16 +322,16 @@ mod tests {
     #[test]
     fn user_exit_fails_before_timelock() {
         let exit_tmpl = CtvTemplate {
-            nversion:    2,
-            nlocktime:   1_000,
-            sequences:   vec![0xffff_fffe],
-            outputs:     vec![dummy_output(98_000)],
+            nversion: 2,
+            nlocktime: 1_000,
+            sequences: vec![0xffff_fffe],
+            outputs: vec![dummy_output(98_000)],
             input_index: 0,
-            label:       Some("user-exit".into()),
+            label: Some("user-exit".into()),
         };
         let bridge = CtvBridgeTemplate {
             sequencer_update: exit_tmpl.clone(),
-            user_exit:        exit_tmpl.clone(),
+            user_exit: exit_tmpl.clone(),
             exit_after_height: BlockHeight(1_000),
         };
 
@@ -337,20 +342,24 @@ mod tests {
     #[test]
     fn user_exit_succeeds_at_timelock() {
         let exit_tmpl = CtvTemplate {
-            nversion:    2,
-            nlocktime:   0,
-            sequences:   vec![0xffff_fffe],
-            outputs:     vec![dummy_output(98_000)],
+            nversion: 2,
+            nlocktime: 0,
+            sequences: vec![0xffff_fffe],
+            outputs: vec![dummy_output(98_000)],
             input_index: 0,
-            label:       Some("user-exit".into()),
+            label: Some("user-exit".into()),
         };
         let bridge = CtvBridgeTemplate {
             sequencer_update: exit_tmpl.clone(),
-            user_exit:        exit_tmpl.clone(),
+            user_exit: exit_tmpl.clone(),
             exit_after_height: BlockHeight(1_000),
         };
 
-        assert!(bridge.verify_user_exit(&exit_tmpl, BlockHeight(1_000)).is_ok());
-        assert!(bridge.verify_user_exit(&exit_tmpl, BlockHeight(1_001)).is_ok());
+        assert!(bridge
+            .verify_user_exit(&exit_tmpl, BlockHeight(1_000))
+            .is_ok());
+        assert!(bridge
+            .verify_user_exit(&exit_tmpl, BlockHeight(1_001))
+            .is_ok());
     }
 }

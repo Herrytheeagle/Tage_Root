@@ -20,9 +20,9 @@
 // BIP-341 §"Taproot Output Key Computation":
 //   https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki
 
-use sha2::{Digest, Sha256};
-use ripemd::Ripemd160;
 use crate::types::Hash256;
+use ripemd::Ripemd160;
+use sha2::{Digest, Sha256};
 
 // ── SHA-256d ──────────────────────────────────────────────────────────────────
 
@@ -34,7 +34,7 @@ use crate::types::Hash256;
 /// let txid_bytes = sha256d(serialised_transaction);
 /// ```
 pub fn sha256d(data: &[u8]) -> Hash256 {
-    let first  = Sha256::digest(data);
+    let first = Sha256::digest(data);
     let second = Sha256::digest(&first);
     let mut out = [0u8; 32];
     out.copy_from_slice(&second);
@@ -178,14 +178,14 @@ pub fn taptweak_hash(internal_key: &[u8; 32], merkle_root: &[u8]) -> Hash256 {
 ///
 /// Reference: https://github.com/bitcoin/bips/blob/master/bip-0119.mediawiki
 pub fn ctv_template_hash(
-    nversion:       i32,
-    nlocktime:      u32,
+    nversion: i32,
+    nlocktime: u32,
     scriptsig_hash: Option<&[u8; 32]>,
-    input_count:    u32,
+    input_count: u32,
     sequences_hash: &[u8; 32],
-    output_count:   u32,
-    outputs_hash:   &[u8; 32],
-    input_index:    u32,
+    output_count: u32,
+    outputs_hash: &[u8; 32],
+    input_index: u32,
 ) -> Hash256 {
     let zero32 = [0u8; 32];
     let sig_hash = scriptsig_hash.unwrap_or(&zero32);
@@ -279,15 +279,15 @@ mod tests {
         let h = sha256d(b"");
         // SHA-256("") = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
         // SHA-256 of that = 5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456
-        let expected = hex::decode(
-            "5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456"
-        ).unwrap();
+        let expected =
+            hex::decode("5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456")
+                .unwrap();
         assert_eq!(&h.0[..], expected.as_slice());
     }
 
     #[test]
     fn tagged_hash_differs_by_tag() {
-        let a = tagged_hash("TapLeaf",   b"data");
+        let a = tagged_hash("TapLeaf", b"data");
         let b = tagged_hash("TapBranch", b"data");
         assert_ne!(a, b, "Different tags must produce different hashes");
     }

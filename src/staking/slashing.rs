@@ -5,12 +5,12 @@
 // Validator slashing for misbehaviour.
 // Implements penalties for fraud proofs and downtime.
 
-use serde::{Deserialize, Serialize};
 use crate::{
     error::{BtcFiError, Result},
-    types::{Amount, Hash256, XOnlyPubKey},
     staking::validator::ValidatorRegistry,
+    types::{Amount, Hash256, XOnlyPubKey},
 };
+use serde::{Deserialize, Serialize};
 
 // ── Slashing Conditions ───────────────────────────────────────────────────────
 
@@ -46,7 +46,12 @@ pub struct SlashEvent {
 }
 
 impl SlashEvent {
-    pub fn new(validator: XOnlyPubKey, reason: SlashingReason, slash_amount: Amount, height: u32) -> Self {
+    pub fn new(
+        validator: XOnlyPubKey,
+        reason: SlashingReason,
+        slash_amount: Amount,
+        height: u32,
+    ) -> Self {
         Self {
             validator,
             reason,
@@ -78,7 +83,8 @@ impl SlashingManager {
         registry: &mut ValidatorRegistry,
         current_height: u32,
     ) -> Result<Amount> {
-        let validator_info = registry.get_validator(validator)
+        let validator_info = registry
+            .get_validator(validator)
             .ok_or(BtcFiError::ValidatorNotFound)?;
 
         // Calculate slash amount (e.g., 10% of stake)

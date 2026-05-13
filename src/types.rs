@@ -231,7 +231,7 @@ impl fmt::Display for OutPoint {
 /// A transaction output: value + locking script.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TxOutput {
-    pub value:  Amount,
+    pub value: Amount,
     pub script: Script,
 }
 

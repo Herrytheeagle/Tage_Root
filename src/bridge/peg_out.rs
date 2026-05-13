@@ -5,24 +5,23 @@
 // Handles the release of BTC from the bridge back to Bitcoin mainnet.
 // Implements the exit path for trust-minimised bridging (L2).
 
-use bitcoin::{
-    absolute::LockTime,
-    Amount as BtcAmount,
-    blockdata::{
-        script::{Builder, ScriptBuf},
-        transaction::{OutPoint as BtcOutPoint, Transaction as BtcTransaction, TxIn, TxOut, Version},
-    },
-    hashes::Hash,
-    secp256k1::XOnlyPublicKey as BtcXOnlyPublicKey,
-    Sequence,
-    Txid as BtcTxid,
-    Witness,
-};
-use serde::{Deserialize, Serialize};
 use crate::{
     error::{BtcFiError, Result},
     types::{Amount, BlockHeight, Hash256, OutPoint, TxId, XOnlyPubKey},
 };
+use bitcoin::{
+    absolute::LockTime,
+    blockdata::{
+        script::{Builder, ScriptBuf},
+        transaction::{
+            OutPoint as BtcOutPoint, Transaction as BtcTransaction, TxIn, TxOut, Version,
+        },
+    },
+    hashes::Hash,
+    secp256k1::XOnlyPublicKey as BtcXOnlyPublicKey,
+    Amount as BtcAmount, Sequence, Txid as BtcTxid, Witness,
+};
+use serde::{Deserialize, Serialize};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -110,13 +109,16 @@ impl PegOutManager {
         current_height: BlockHeight,
     ) -> Result<TxId> {
         let key = deposit_outpoint.to_string();
-        let request = self.requests.get(&key)
+        let request = self
+            .requests
+            .get(&key)
             .ok_or_else(|| BtcFiError::PegOutNotFound { txid: key.clone() })?;
 
         // Check confirmation depth
         if current_height.0 < request.requested_at.0 + PEG_OUT_CONFIRMATION_DEPTH {
             return Err(BtcFiError::PegOutNotConfirmed {
-                blocks_remaining: (request.requested_at.0 + PEG_OUT_CONFIRMATION_DEPTH) - current_height.0,
+                blocks_remaining: (request.requested_at.0 + PEG_OUT_CONFIRMATION_DEPTH)
+                    - current_height.0,
             });
         }
 
@@ -136,7 +138,11 @@ impl PegOutManager {
         Ok(TxId(tx.txid().to_byte_array()))
     }
 
-    fn build_unsigned_tx(&self, request: &PegOutRequest, recipient: XOnlyPubKey) -> Result<BtcTransaction> {
+    fn build_unsigned_tx(
+        &self,
+        request: &PegOutRequest,
+        recipient: XOnlyPubKey,
+    ) -> Result<BtcTransaction> {
         if request.amount.0 < Amount::DUST_P2TR.0 {
             return Err(BtcFiError::BelowDustThreshold {
                 amount: request.amount.0,
@@ -188,13 +194,16 @@ impl PegOutManager {
         current_height: BlockHeight,
     ) -> Result<TxId> {
         let key = deposit_outpoint.to_string();
-        let request = self.requests.get(&key)
+        let request = self
+            .requests
+            .get(&key)
             .ok_or_else(|| BtcFiError::PegOutNotFound { txid: key.clone() })?;
 
         // Check timelock
         if current_height.0 < request.requested_at.0 + EMERGENCY_EXIT_TIMELOCK_BLOCKS {
             return Err(BtcFiError::EmergencyExitTimelock {
-                blocks_remaining: (request.requested_at.0 + EMERGENCY_EXIT_TIMELOCK_BLOCKS) - current_height.0,
+                blocks_remaining: (request.requested_at.0 + EMERGENCY_EXIT_TIMELOCK_BLOCKS)
+                    - current_height.0,
             });
         }
 
@@ -218,7 +227,10 @@ mod tests {
     use crate::types::TxId;
 
     fn op() -> OutPoint {
-        OutPoint { txid: TxId([1u8; 32]), vout: 0 }
+        OutPoint {
+            txid: TxId([1u8; 32]),
+            vout: 0,
+        }
     }
 
     fn key() -> XOnlyPubKey {
@@ -237,7 +249,9 @@ mod tests {
         );
 
         mgr.submit_request(request).unwrap();
-        let txid = mgr.finalise_peg_out(&op(), BlockHeight(PEG_OUT_CONFIRMATION_DEPTH)).unwrap();
+        let txid = mgr
+            .finalise_peg_out(&op(), BlockHeight(PEG_OUT_CONFIRMATION_DEPTH))
+            .unwrap();
         assert!(txid.0 != [0u8; 32]);
     }
 
@@ -253,7 +267,9 @@ mod tests {
         );
 
         mgr.submit_request(request).unwrap();
-        let txid = mgr.emergency_exit(&op(), key(), BlockHeight(EMERGENCY_EXIT_TIMELOCK_BLOCKS)).unwrap();
+        let txid = mgr
+            .emergency_exit(&op(), key(), BlockHeight(EMERGENCY_EXIT_TIMELOCK_BLOCKS))
+            .unwrap();
         assert!(txid.0 != [0u8; 32]);
     }
 }

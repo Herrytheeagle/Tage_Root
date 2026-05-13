@@ -38,12 +38,12 @@
 // Research paper §3.4: "BitVM and Optimistic Computation"
 // Research paper §5.4: "Path B — BitVM Optimistic Verification"
 
-use serde::{Deserialize, Serialize};
 use crate::{
     error::{BtcFiError, Result},
     types::{BlockHeight, Hash256, OutPoint},
     utils::hash::sha256d,
 };
+use serde::{Deserialize, Serialize};
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -301,9 +301,9 @@ impl BitvmBridgeManager {
     /// Submit an operator claim for a deposit.
     pub fn submit_claim(
         &mut self,
-        deposit_outpoint:  OutPoint,
+        deposit_outpoint: OutPoint,
         claimed_state_root: Hash256,
-        current_height:    BlockHeight,
+        current_height: BlockHeight,
     ) {
         let claim = OperatorClaim::new(deposit_outpoint, claimed_state_root, current_height);
         self.claims.push(claim);
@@ -315,13 +315,14 @@ impl BitvmBridgeManager {
     pub fn initiate_dispute(
         &mut self,
         deposit_outpoint: &OutPoint,
-        total_steps:       u64,
-        current_height:    BlockHeight,
+        total_steps: u64,
+        current_height: BlockHeight,
     ) -> Result<()> {
         let key = deposit_outpoint.to_string();
 
         // Find the most recent unfinalised claim for this outpoint.
-        let claim = self.claims
+        let claim = self
+            .claims
             .iter()
             .rev()
             .find(|c| c.deposit_outpoint == *deposit_outpoint && !c.finalised)
@@ -363,7 +364,10 @@ mod tests {
     use crate::types::TxId;
 
     fn op() -> OutPoint {
-        OutPoint { txid: TxId([9u8; 32]), vout: 0 }
+        OutPoint {
+            txid: TxId([9u8; 32]),
+            vout: 0,
+        }
     }
 
     #[test]

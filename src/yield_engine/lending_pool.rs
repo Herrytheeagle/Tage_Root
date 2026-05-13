@@ -35,14 +35,14 @@
 // Research paper §5.3: "Yield Generation Mechanics"
 // Aave v2 interest rate model: https://docs.aave.com/risk/liquidity-risk/borrow-interest-rate
 
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use crate::{
     error::{BtcFiError, Result},
     execution::state::L2State,
     types::{Address, Amount, BlockHeight, U256},
     yield_engine::interest_rate::*,
 };
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // ── Position ──────────────────────────────────────────────────────────────────
 
@@ -53,27 +53,27 @@ use crate::{
 /// This is the same cToken / aToken pattern used by Compound / Aave.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LenderPosition {
-    pub l2_address:      String,
+    pub l2_address: String,
     /// Number of pool shares owned by this lender.
-    pub shares:          u64,
+    pub shares: u64,
     /// Block at which this position was last updated.
-    pub last_update:     BlockHeight,
+    pub last_update: BlockHeight,
 }
 
 /// An outstanding borrow from the pool.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BorrowPosition {
-    pub l2_address:      String,
+    pub l2_address: String,
     /// Principal borrowed (satoshis at the time of borrowing).
-    pub principal:       Amount,
+    pub principal: Amount,
     /// Accrued interest as of `last_update` (satoshis).
     pub accrued_interest: Amount,
     /// Borrow rate at origination (annual basis points).
     pub borrow_rate_bps: u64,
     /// Block at which interest was last compounded.
-    pub last_update:     BlockHeight,
+    pub last_update: BlockHeight,
     /// Collateral provided (satoshis; must stay above `COLLATERAL_FACTOR * debt`).
-    pub collateral:      Amount,
+    pub collateral: Amount,
 }
 
 impl BorrowPosition {
@@ -95,22 +95,22 @@ impl BorrowPosition {
 #[derive(Debug)]
 pub struct LendingPool {
     /// Total BTC deposited (includes lent-out BTC).  Satoshis.
-    total_deposits:   u64,
+    total_deposits: u64,
 
     /// Total BTC currently outstanding to borrowers.  Satoshis.
-    total_borrows:    u64,
+    total_borrows: u64,
 
     /// Total pool shares issued.  Exchange rate = total_deposits / total_shares.
-    total_shares:     u64,
+    total_shares: u64,
 
     /// Block at which the pool state was last updated.
-    last_update:      BlockHeight,
+    last_update: BlockHeight,
 
     /// Lender positions.
-    lenders:          HashMap<String, LenderPosition>,
+    lenders: HashMap<String, LenderPosition>,
 
     /// Borrow positions.
-    borrowers:        HashMap<String, BorrowPosition>,
+    borrowers: HashMap<String, BorrowPosition>,
 }
 
 impl LendingPool {
@@ -118,11 +118,11 @@ impl LendingPool {
     pub fn new(genesis_height: BlockHeight) -> Self {
         Self {
             total_deposits: 0,
-            total_borrows:  0,
-            total_shares:   0,
-            last_update:    genesis_height,
-            lenders:        HashMap::new(),
-            borrowers:      HashMap::new(),
+            total_borrows: 0,
+            total_shares: 0,
+            last_update: genesis_height,
+            lenders: HashMap::new(),
+            borrowers: HashMap::new(),
         }
     }
 
@@ -155,8 +155,12 @@ impl LendingPool {
     /// utilisation can be recomputed from shared execution state.
     pub fn utilisation_bps_from_state(&self, state: &L2State) -> u64 {
         let pool_address = Address::zero();
-        let total_deposits = state.read_storage(&pool_address, &U256::from_u64(1)).as_u64();
-        let total_borrows = state.read_storage(&pool_address, &U256::from_u64(2)).as_u64();
+        let total_deposits = state
+            .read_storage(&pool_address, &U256::from_u64(1))
+            .as_u64();
+        let total_borrows = state
+            .read_storage(&pool_address, &U256::from_u64(2))
+            .as_u64();
         utilisation_bps(total_borrows, total_deposits)
     }
 
@@ -166,8 +170,16 @@ impl LendingPool {
     /// cooperating through the same state trie.
     pub fn persist_totals_to_state(&self, state: &mut L2State) {
         let pool_address = Address::zero();
-        state.write_storage(&pool_address, &U256::from_u64(1), U256::from_u64(self.total_deposits));
-        state.write_storage(&pool_address, &U256::from_u64(2), U256::from_u64(self.total_borrows));
+        state.write_storage(
+            &pool_address,
+            &U256::from_u64(1),
+            U256::from_u64(self.total_deposits),
+        );
+        state.write_storage(
+            &pool_address,
+            &U256::from_u64(2),
+            U256::from_u64(self.total_borrows),
+        );
     }
 
     // ── Deposits ────────────────────────────────────────────────────────────
@@ -194,27 +206,30 @@ impl LendingPool {
     /// The number of pool shares minted to the depositor.
     pub fn deposit(
         &mut self,
-        depositor:      String,
-        amount:         Amount,
+        depositor: String,
+        amount: Amount,
         current_height: BlockHeight,
     ) -> Result<u64> {
         self.accrue_interest(current_height);
 
-        let sats   = amount.sats();
-        let rate   = self.exchange_rate();
+        let sats = amount.sats();
+        let rate = self.exchange_rate();
         // shares = (sats * 1e6) / exchange_rate
         let shares = sats * 1_000_000 / rate;
 
         self.total_deposits += sats;
-        self.total_shares   += shares;
+        self.total_shares += shares;
 
-        let pos = self.lenders.entry(depositor.clone()).or_insert(LenderPosition {
-            l2_address:  depositor,
-            shares:      0,
-            last_update: current_height,
-        });
-        pos.shares      += shares;
-        pos.last_update  = current_height;
+        let pos = self
+            .lenders
+            .entry(depositor.clone())
+            .or_insert(LenderPosition {
+                l2_address: depositor,
+                shares: 0,
+                last_update: current_height,
+            });
+        pos.shares += shares;
+        pos.last_update = current_height;
 
         log::info!("Deposited {} sats → {} shares", sats, shares);
         Ok(shares)
@@ -226,17 +241,21 @@ impl LendingPool {
     /// The BTC amount returned to the depositor.
     pub fn withdraw(
         &mut self,
-        depositor:      &str,
-        shares:          u64,
-        current_height:  BlockHeight,
+        depositor: &str,
+        shares: u64,
+        current_height: BlockHeight,
     ) -> Result<Amount> {
         self.accrue_interest(current_height);
 
-        let rate     = self.exchange_rate();
+        let rate = self.exchange_rate();
         let sats_out = shares * rate / 1_000_000;
 
-        let pos = self.lenders.get_mut(depositor)
-            .ok_or_else(|| BtcFiError::DepositNotFound { txid: depositor.into() })?;
+        let pos = self
+            .lenders
+            .get_mut(depositor)
+            .ok_or_else(|| BtcFiError::DepositNotFound {
+                txid: depositor.into(),
+            })?;
 
         if pos.shares < shares {
             return Err(BtcFiError::InsufficientLiquidity {
@@ -254,10 +273,10 @@ impl LendingPool {
             });
         }
 
-        pos.shares      -= shares;
-        pos.last_update  = current_height;
+        pos.shares -= shares;
+        pos.last_update = current_height;
         self.total_deposits -= sats_out;
-        self.total_shares   -= shares;
+        self.total_shares -= shares;
 
         log::info!("Withdrew {} sats (redeemed {} shares)", sats_out, shares);
         Ok(Amount(sats_out))
@@ -275,9 +294,9 @@ impl LendingPool {
     ///    and earn yield from borrowers who pay interest."
     pub fn borrow(
         &mut self,
-        borrower:       String,
-        amount:         Amount,
-        collateral:     Amount,
+        borrower: String,
+        amount: Amount,
+        collateral: Amount,
         current_height: BlockHeight,
     ) -> Result<()> {
         self.accrue_interest(current_height);
@@ -301,14 +320,17 @@ impl LendingPool {
         let rate = self.borrow_rate_bps();
         self.total_borrows += amount.sats();
 
-        self.borrowers.insert(borrower.clone(), BorrowPosition {
-            l2_address:       borrower,
-            principal:        amount,
-            accrued_interest: Amount(0),
-            borrow_rate_bps:  rate,
-            last_update:      current_height,
-            collateral,
-        });
+        self.borrowers.insert(
+            borrower.clone(),
+            BorrowPosition {
+                l2_address: borrower,
+                principal: amount,
+                accrued_interest: Amount(0),
+                borrow_rate_bps: rate,
+                last_update: current_height,
+                collateral,
+            },
+        );
 
         Ok(())
     }
@@ -316,14 +338,18 @@ impl LendingPool {
     /// Repay a borrow position (partial or full).
     pub fn repay(
         &mut self,
-        borrower:       &str,
-        amount:         Amount,
+        borrower: &str,
+        amount: Amount,
         current_height: BlockHeight,
     ) -> Result<Amount> {
         self.accrue_interest(current_height);
 
-        let pos = self.borrowers.get_mut(borrower)
-            .ok_or_else(|| BtcFiError::DepositNotFound { txid: borrower.into() })?;
+        let pos = self
+            .borrowers
+            .get_mut(borrower)
+            .ok_or_else(|| BtcFiError::DepositNotFound {
+                txid: borrower.into(),
+            })?;
 
         let total = pos.total_debt().unwrap_or(Amount(u64::MAX));
         let payment = amount.sats().min(total.sats());
@@ -334,15 +360,21 @@ impl LendingPool {
         let principal_paid = payment - interest_paid;
 
         pos.accrued_interest = Amount(pos.accrued_interest.sats() - interest_paid);
-        pos.principal        = pos.principal.checked_sub(Amount(principal_paid))
-                                    .unwrap_or(Amount(0));
-        pos.last_update      = current_height;
+        pos.principal = pos
+            .principal
+            .checked_sub(Amount(principal_paid))
+            .unwrap_or(Amount(0));
+        pos.last_update = current_height;
 
         let actual_payment = Amount(payment);
-        self.total_borrows   = self.total_borrows.saturating_sub(principal_paid);
+        self.total_borrows = self.total_borrows.saturating_sub(principal_paid);
         self.total_deposits += interest_paid; // interest flows to depositors
 
-        log::info!("Repaid {} sats; {} sats remaining debt", payment, remaining_sats);
+        log::info!(
+            "Repaid {} sats; {} sats remaining debt",
+            payment,
+            remaining_sats
+        );
         Ok(actual_payment)
     }
 
@@ -364,18 +396,16 @@ impl LendingPool {
             let blocks = current_height.0.saturating_sub(pos.last_update.0) as u64;
             // interest = principal * annual_rate * blocks / blocks_per_year
             //           (all in satoshis * basis_points / 10_000 / blocks_per_year)
-            let interest_sats = pos.principal.sats()
-                * pos.borrow_rate_bps
-                * blocks
-                / (10_000 * BLOCKS_PER_YEAR);
+            let interest_sats =
+                pos.principal.sats() * pos.borrow_rate_bps * blocks / (10_000 * BLOCKS_PER_YEAR);
             pos.accrued_interest = Amount(pos.accrued_interest.sats() + interest_sats);
-            pos.last_update      = current_height;
-            new_interest_total  += interest_sats;
+            pos.last_update = current_height;
+            new_interest_total += interest_sats;
         }
 
         // Interest flows into total_deposits, increasing the exchange rate.
         self.total_deposits += new_interest_total;
-        self.last_update     = current_height;
+        self.last_update = current_height;
     }
 
     // ── Getters ─────────────────────────────────────────────────────────────
@@ -383,13 +413,13 @@ impl LendingPool {
     /// Returns a summary of current pool metrics.
     pub fn metrics(&self) -> PoolMetrics {
         PoolMetrics {
-            total_deposits:  Amount(self.total_deposits),
-            total_borrows:   Amount(self.total_borrows),
-            available:       Amount(self.total_deposits.saturating_sub(self.total_borrows)),
+            total_deposits: Amount(self.total_deposits),
+            total_borrows: Amount(self.total_borrows),
+            available: Amount(self.total_deposits.saturating_sub(self.total_borrows)),
             utilisation_bps: self.utilisation_bps(),
             borrow_rate_bps: self.borrow_rate_bps(),
             supply_rate_bps: self.supply_rate_bps(),
-            exchange_rate:   self.exchange_rate(),
+            exchange_rate: self.exchange_rate(),
         }
     }
 }
@@ -397,14 +427,14 @@ impl LendingPool {
 /// A snapshot of pool state metrics for display / monitoring.
 #[derive(Debug, Clone)]
 pub struct PoolMetrics {
-    pub total_deposits:  Amount,
-    pub total_borrows:   Amount,
-    pub available:       Amount,
+    pub total_deposits: Amount,
+    pub total_borrows: Amount,
+    pub available: Amount,
     pub utilisation_bps: u64,
     pub borrow_rate_bps: u64,
     pub supply_rate_bps: u64,
     /// Satoshis per share × 1,000,000.
-    pub exchange_rate:   u64,
+    pub exchange_rate: u64,
 }
 
 // ── Unit tests ────────────────────────────────────────────────────────────────
@@ -416,7 +446,8 @@ mod tests {
     #[test]
     fn deposit_and_withdraw_roundtrip() {
         let mut pool = LendingPool::new(BlockHeight(0));
-        pool.deposit("alice".into(), Amount(1_000_000), BlockHeight(0)).unwrap();
+        pool.deposit("alice".into(), Amount(1_000_000), BlockHeight(0))
+            .unwrap();
 
         let m = pool.metrics();
         assert_eq!(m.total_deposits.sats(), 1_000_000);
@@ -430,13 +461,15 @@ mod tests {
     #[test]
     fn borrow_increases_utilisation() {
         let mut pool = LendingPool::new(BlockHeight(0));
-        pool.deposit("lp".into(), Amount(2_000_000), BlockHeight(0)).unwrap();
+        pool.deposit("lp".into(), Amount(2_000_000), BlockHeight(0))
+            .unwrap();
         pool.borrow(
             "bob".into(),
             Amount(1_000_000),
             Amount(1_600_000), // 160% collateral
             BlockHeight(0),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(pool.utilisation_bps(), 5_000); // 50%
         assert!(pool.borrow_rate_bps() > RATE_AT_ZERO_UTIL_BPS);
@@ -445,48 +478,63 @@ mod tests {
     #[test]
     fn borrow_rate_jumps_above_optimal() {
         let mut pool = LendingPool::new(BlockHeight(0));
-        pool.deposit("lp".into(), Amount(10_000_000), BlockHeight(0)).unwrap();
+        pool.deposit("lp".into(), Amount(10_000_000), BlockHeight(0))
+            .unwrap();
         pool.borrow(
             "heavy".into(),
             Amount(9_500_000), // 95% utilisation
             Amount(15_000_000),
             BlockHeight(0),
-        ).unwrap();
+        )
+        .unwrap();
 
         let rate = pool.borrow_rate_bps();
         // Should be well above the optimal rate due to the steep second slope.
-        assert!(rate > RATE_AT_OPTIMAL_UTIL_BPS,
-            "Rate {} should exceed optimal rate {}", rate, RATE_AT_OPTIMAL_UTIL_BPS);
+        assert!(
+            rate > RATE_AT_OPTIMAL_UTIL_BPS,
+            "Rate {} should exceed optimal rate {}",
+            rate,
+            RATE_AT_OPTIMAL_UTIL_BPS
+        );
     }
 
     #[test]
     fn insufficient_collateral_rejected() {
         let mut pool = LendingPool::new(BlockHeight(0));
-        pool.deposit("lp".into(), Amount(2_000_000), BlockHeight(0)).unwrap();
+        pool.deposit("lp".into(), Amount(2_000_000), BlockHeight(0))
+            .unwrap();
         let result = pool.borrow(
             "undercollateralised".into(),
             Amount(1_000_000),
             Amount(1_000_000), // exactly 100% — below 150% requirement
             BlockHeight(0),
         );
-        assert!(matches!(result, Err(BtcFiError::InsufficientCollateral { .. })));
+        assert!(matches!(
+            result,
+            Err(BtcFiError::InsufficientCollateral { .. })
+        ));
     }
 
     #[test]
     fn interest_accrues_over_blocks() {
         let mut pool = LendingPool::new(BlockHeight(0));
-        pool.deposit("lp".into(), Amount(10_000_000), BlockHeight(0)).unwrap();
+        pool.deposit("lp".into(), Amount(10_000_000), BlockHeight(0))
+            .unwrap();
         pool.borrow(
             "borrower".into(),
             Amount(5_000_000),
             Amount(8_000_000),
             BlockHeight(0),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Accrue one year of interest.
         pool.accrue_interest(BlockHeight(BLOCKS_PER_YEAR as u32));
 
         let debt = pool.borrowers["borrower"].total_debt().unwrap();
-        assert!(debt.sats() > 5_000_000, "Debt should have grown with interest");
+        assert!(
+            debt.sats() > 5_000_000,
+            "Debt should have grown with interest"
+        );
     }
 }

@@ -24,5 +24,5 @@ pub mod utils;
 pub mod yield_engine;
 
 // Re-export key types for convenience
-pub use types::*;
 pub use error::*;
+pub use types::*;

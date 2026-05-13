@@ -30,17 +30,17 @@
 // BIP-341 §"Constructing and Spending": https://github.com/bitcoin/bips/blob/master/bip-0341.mediawiki
 // Research paper §5.2: "Proposed Architecture"
 
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use crate::{
     covenant::{
         ctv::{build_tapscript_ctv_leaf, CtvBridgeTemplate, CtvTemplate},
         taproot::{TapLeaf, TapTree, TaprootBuilder, NUMS_KEY},
     },
-    execution::state::L2State,
     error::{BtcFiError, Result},
+    execution::state::L2State,
     types::{Address, Amount, BlockHeight, DepositStatus, OutPoint, Script, TxOutput, U256},
 };
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -137,14 +137,14 @@ impl PegInManager {
     /// (BIP-341 §"Constructing"), making the key path unspendable.
     pub fn create_peg_address(
         &self,
-        l2_recipient:    &str,
+        l2_recipient: &str,
         expected_amount: Amount,
-        current_height:  BlockHeight,
+        current_height: BlockHeight,
     ) -> Result<(Script, CtvBridgeTemplate)> {
         // Guard: reject dust deposits.
         if expected_amount < Amount::DUST_P2TR {
             return Err(BtcFiError::BelowDustThreshold {
-                amount:    expected_amount.sats(),
+                amount: expected_amount.sats(),
                 threshold: Amount::DUST_P2TR.sats(),
             });
         }
@@ -160,17 +160,17 @@ impl PegInManager {
             .unwrap()
             .script_pubkey();
         let sequencer_tmpl = CtvTemplate {
-            nversion:    2,
-            nlocktime:   0,
-            sequences:   vec![0xffff_fffe], // no relative timelock on sequencer path
-            outputs:     vec![TxOutput {
-                value:  expected_amount
+            nversion: 2,
+            nlocktime: 0,
+            sequences: vec![0xffff_fffe], // no relative timelock on sequencer path
+            outputs: vec![TxOutput {
+                value: expected_amount
                     .checked_sub(Amount(1_000)) // subtract 1000 sat sequencer fee
                     .unwrap_or(expected_amount),
                 script: sequencer_output_script,
             }],
             input_index: 0,
-            label:       Some(format!("sequencer-update:{l2_recipient}")),
+            label: Some(format!("sequencer-update:{l2_recipient}")),
         };
 
         // Build the user-exit CTV template.
@@ -182,27 +182,27 @@ impl PegInManager {
             .unwrap()
             .script_pubkey();
         let user_exit_tmpl = CtvTemplate {
-            nversion:    2,
-            nlocktime:   exit_height.0,
+            nversion: 2,
+            nlocktime: exit_height.0,
             // Relative timelock via nSequence encoding (BIP-68):
             //   0xFFFF_FFFE is the maximum non-final sequence with no relative lock.
             //   For a block-based lock: 0x0000_0000 | EXIT_TIMELOCK_BLOCKS
-            sequences:   vec![EXIT_TIMELOCK_BLOCKS],
-            outputs:     vec![TxOutput {
-                value:  expected_amount
+            sequences: vec![EXIT_TIMELOCK_BLOCKS],
+            outputs: vec![TxOutput {
+                value: expected_amount
                     .checked_sub(Amount(500)) // subtract 500 sat exit fee
                     .unwrap_or(expected_amount),
                 script: user_script,
             }],
             input_index: 0,
-            label:       Some(format!("user-exit:{l2_recipient}")),
+            label: Some(format!("user-exit:{l2_recipient}")),
         };
 
         // Compile each template into a Tapscript CTV leaf script.
-        let seq_hash  = sequencer_tmpl.hash();
+        let seq_hash = sequencer_tmpl.hash();
         let exit_hash = user_exit_tmpl.hash();
 
-        let seq_leaf  = TapLeaf::new(build_tapscript_ctv_leaf(&seq_hash));
+        let seq_leaf = TapLeaf::new(build_tapscript_ctv_leaf(&seq_hash));
         let exit_leaf = TapLeaf::new(build_tapscript_ctv_leaf(&exit_hash));
 
         // Build a two-leaf Taproot tree (BIP-341).
@@ -213,15 +213,13 @@ impl PegInManager {
 
         // Finalise the Taproot output with the NUMS internal key.
         // The NUMS key ensures the key path is provably unspendable (BIP-341).
-        let taproot_output = TaprootBuilder::new(NUMS_KEY)
-            .add_tree(tree)
-            .build()?;
+        let taproot_output = TaprootBuilder::new(NUMS_KEY).add_tree(tree).build()?;
 
         let peg_script = taproot_output.script_pubkey();
 
         let bridge_template = CtvBridgeTemplate {
             sequencer_update: sequencer_tmpl,
-            user_exit:        user_exit_tmpl,
+            user_exit: user_exit_tmpl,
             exit_after_height: exit_height,
         };
 
@@ -232,16 +230,16 @@ impl PegInManager {
     /// broadcast (but not yet confirmed).
     pub fn register_deposit(
         &mut self,
-        state:             &mut L2State,
-        outpoint:          OutPoint,
-        amount:            Amount,
-        l2_recipient:      String,
-        peg_script:        Script,
-        ctv_template:      CtvBridgeTemplate,
+        state: &mut L2State,
+        outpoint: OutPoint,
+        amount: Amount,
+        l2_recipient: String,
+        peg_script: Script,
+        ctv_template: CtvBridgeTemplate,
     ) -> Result<()> {
         if amount.sats() < MIN_DEPOSIT_SATS {
             return Err(BtcFiError::BelowDustThreshold {
-                amount:    amount.sats(),
+                amount: amount.sats(),
                 threshold: MIN_DEPOSIT_SATS,
             });
         }
@@ -275,14 +273,16 @@ impl PegInManager {
     /// Returns the L2 recipient and amount so the caller can issue the L2 credit.
     pub fn confirm_deposit(
         &mut self,
-        outpoint:       &OutPoint,
+        outpoint: &OutPoint,
         confirm_height: BlockHeight,
     ) -> Result<(String, Amount)> {
         let key = outpoint.to_string();
-        let deposit = self.deposits.get_mut(&key)
+        let deposit = self
+            .deposits
+            .get_mut(&key)
             .ok_or_else(|| BtcFiError::DepositNotFound { txid: key })?;
 
-        deposit.status           = DepositStatus::Confirmed;
+        deposit.status = DepositStatus::Confirmed;
         deposit.confirmed_height = Some(confirm_height);
 
         Ok((deposit.l2_recipient.clone(), deposit.amount))
@@ -298,9 +298,7 @@ impl PegInManager {
         self.deposits
             .values()
             .filter(|d| matches!(d.status, DepositStatus::Confirmed))
-            .fold(Amount(0), |acc, d| {
-                acc.checked_add(d.amount).unwrap_or(acc)
-            })
+            .fold(Amount(0), |acc, d| acc.checked_add(d.amount).unwrap_or(acc))
     }
 }
 
@@ -309,10 +307,16 @@ impl PegInManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{execution::state::L2State, types::{Hash256, TxId}};
+    use crate::{
+        execution::state::L2State,
+        types::{Hash256, TxId},
+    };
 
     fn test_outpoint() -> OutPoint {
-        OutPoint { txid: TxId([1u8; 32]), vout: 0 }
+        OutPoint {
+            txid: TxId([1u8; 32]),
+            vout: 0,
+        }
     }
 
     #[test]
@@ -352,11 +356,10 @@ mod tests {
             String::from("alice"),
             script,
             tmpl,
-        ).unwrap();
+        )
+        .unwrap();
 
-        let (recipient, amount) = mgr
-            .confirm_deposit(&op, BlockHeight(800_006))
-            .unwrap();
+        let (recipient, amount) = mgr.confirm_deposit(&op, BlockHeight(800_006)).unwrap();
 
         assert_eq!(recipient, "alice");
         assert_eq!(amount.sats(), 500_000);
@@ -364,7 +367,12 @@ mod tests {
 
         let bridge_state_address = Address::zero();
         let deposit_total_slot = U256::from_u64(1);
-        assert_eq!(state.read_storage(&bridge_state_address, &deposit_total_slot).as_u64(), 500_000);
+        assert_eq!(
+            state
+                .read_storage(&bridge_state_address, &deposit_total_slot)
+                .as_u64(),
+            500_000
+        );
         assert_ne!(state.trie.state_root(), Hash256([0u8; 32]));
     }
 }

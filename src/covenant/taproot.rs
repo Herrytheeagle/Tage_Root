@@ -26,12 +26,12 @@
 // BIP-342: https://github.com/bitcoin/bips/blob/master/bip-0342.mediawiki
 // Research paper §4.1: "BIP-340, BIP-341, and BIP-342: Taproot"
 
-use serde::{Deserialize, Serialize};
 use crate::{
     error::{BtcFiError, Result},
     types::{Hash256, Script, XOnlyPubKey},
-    utils::hash::{tapleaf_hash, tapbranch_hash, taptweak_hash},
+    utils::hash::{tapbranch_hash, tapleaf_hash, taptweak_hash},
 };
+use serde::{Deserialize, Serialize};
 
 // ── NUMS internal key ─────────────────────────────────────────────────────────
 
@@ -46,10 +46,8 @@ use crate::{
 /// of secp256k1, which has no known discrete log.  It is the same NUMS point
 /// used in the BIP-341 test vectors.
 pub const NUMS_KEY: XOnlyPubKey = XOnlyPubKey([
-    0x50, 0x92, 0x9b, 0x74, 0xc1, 0xa0, 0x49, 0x54,
-    0xb7, 0x8b, 0x4b, 0x60, 0x35, 0xe9, 0x7a, 0x5e,
-    0x07, 0x8a, 0x5a, 0x0f, 0x28, 0xec, 0x96, 0xd5,
-    0x47, 0xbf, 0xee, 0x9a, 0xce, 0x80, 0x3a, 0xc0,
+    0x50, 0x92, 0x9b, 0x74, 0xc1, 0xa0, 0x49, 0x54, 0xb7, 0x8b, 0x4b, 0x60, 0x35, 0xe9, 0x7a, 0x5e,
+    0x07, 0x8a, 0x5a, 0x0f, 0x28, 0xec, 0x96, 0xd5, 0x47, 0xbf, 0xee, 0x9a, 0xce, 0x80, 0x3a, 0xc0,
 ]);
 
 /// SegWit version 1 witness program version byte.
@@ -68,13 +66,16 @@ pub struct TapLeaf {
     /// Leaf version byte.  Use `0xc0` for standard Tapscript (BIP-342).
     pub version: u8,
     /// The Tapscript to be executed when this leaf is revealed.
-    pub script:  Script,
+    pub script: Script,
 }
 
 impl TapLeaf {
     /// Construct a standard BIP-342 Tapscript leaf.
     pub fn new(script: Script) -> Self {
-        Self { version: 0xc0, script }
+        Self {
+            version: 0xc0,
+            script,
+        }
     }
 
     /// Compute the `TapLeaf` tagged hash for this leaf.
@@ -164,7 +165,7 @@ impl TaprootOutput {
     pub fn script_pubkey(&self) -> Script {
         let mut s = Vec::with_capacity(34);
         s.push(WITNESS_VERSION_TAPROOT); // OP_1 = 0x51
-        s.push(0x20);                   // Push 32 bytes
+        s.push(0x20); // Push 32 bytes
         s.extend_from_slice(&self.output_key.0);
         Script(s)
     }
@@ -175,7 +176,7 @@ impl TaprootOutput {
     /// of script-path spending witnesses.
     pub fn merkle_root_bytes(&self) -> Vec<u8> {
         match &self.tree {
-            None       => Vec::new(), // empty merkle root for key-path only
+            None => Vec::new(), // empty merkle root for key-path only
             Some(tree) => tree.merkle_root().0.to_vec(),
         }
     }
@@ -200,7 +201,7 @@ impl TaprootOutput {
 /// ```
 pub struct TaprootBuilder {
     internal_key: XOnlyPubKey,
-    tree:         Option<TapTree>,
+    tree: Option<TapTree>,
 }
 
 impl TaprootBuilder {
@@ -209,7 +210,10 @@ impl TaprootBuilder {
     /// For peg outputs where key-path spending must be disabled, pass
     /// `NUMS_KEY` here.
     pub fn new(internal_key: XOnlyPubKey) -> Self {
-        Self { internal_key, tree: None }
+        Self {
+            internal_key,
+            tree: None,
+        }
     }
 
     /// Attach a script tree to this output.
@@ -261,19 +265,23 @@ impl TaprootBuilder {
         let tweak = taptweak_hash(&self.internal_key.0, &merkle_root_bytes);
 
         // Derive output key: Q = P + t·G
-        let internal_pk = secp256k1::XOnlyPublicKey::from_slice(&self.internal_key.0)
-            .map_err(|_| BtcFiError::InvalidTaprootKey {
-                reason: "Invalid internal key".into(),
+        let internal_pk =
+            secp256k1::XOnlyPublicKey::from_slice(&self.internal_key.0).map_err(|_| {
+                BtcFiError::InvalidTaprootKey {
+                    reason: "Invalid internal key".into(),
+                }
             })?;
-        let tweak_scalar = secp256k1::Scalar::from_be_bytes(tweak.0)
-            .map_err(|_| BtcFiError::InvalidTaprootKey {
+        let tweak_scalar = secp256k1::Scalar::from_be_bytes(tweak.0).map_err(|_| {
+            BtcFiError::InvalidTaprootKey {
                 reason: "Invalid tweak scalar".into(),
-            })?;
+            }
+        })?;
         let secp = secp256k1::Secp256k1::new();
-        let (output_key, _parity) = internal_pk.add_tweak(&secp, &tweak_scalar)
-            .map_err(|_| BtcFiError::InvalidTaprootKey {
+        let (output_key, _parity) = internal_pk.add_tweak(&secp, &tweak_scalar).map_err(|_| {
+            BtcFiError::InvalidTaprootKey {
                 reason: "Tweak addition failed".into(),
-            })?;
+            }
+        })?;
         let output_key = XOnlyPubKey(output_key.serialize());
 
         Ok(TaprootOutput {

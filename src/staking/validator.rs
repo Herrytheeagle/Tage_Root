@@ -23,12 +23,12 @@
 // Research paper §2.3: "The Absence of Proof-of-Stake Consensus"
 // Research paper §5.3: "Re-staking and security provisioning"
 
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use crate::{
     error::{BtcFiError, Result},
     types::{Amount, BlockHeight, XOnlyPubKey},
 };
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -138,39 +138,43 @@ impl ValidatorRegistry {
     ///    restaking model."
     pub fn register(
         &mut self,
-        pubkey:          XOnlyPubKey,
-        bond:            Amount,
-        current_height:  BlockHeight,
-        name:            Option<String>,
+        pubkey: XOnlyPubKey,
+        bond: Amount,
+        current_height: BlockHeight,
+        name: Option<String>,
     ) -> Result<()> {
         if bond.sats() < MIN_BOND_SATS {
             return Err(BtcFiError::BondTooSmall {
                 minimum: MIN_BOND_SATS,
-                got:     bond.sats(),
+                got: bond.sats(),
             });
         }
 
-        let active_count = self.validators
+        let active_count = self
+            .validators
             .values()
             .filter(|v| v.status == ValidatorStatus::Active)
             .count();
         if active_count >= MAX_VALIDATORS {
             return Err(BtcFiError::BondTooSmall {
                 minimum: MIN_BOND_SATS,
-                got:     0, // reuse error; production would have a dedicated variant
+                got: 0, // reuse error; production would have a dedicated variant
             });
         }
 
         let key = pubkey.to_string();
-        self.validators.insert(key, Validator {
-            pubkey,
-            bond,
-            pending_rewards:  Amount(0),
-            lifetime_rewards: Amount(0),
-            status:           ValidatorStatus::Active,
-            registered_at:    current_height,
-            name,
-        });
+        self.validators.insert(
+            key,
+            Validator {
+                pubkey,
+                bond,
+                pending_rewards: Amount(0),
+                lifetime_rewards: Amount(0),
+                status: ValidatorStatus::Active,
+                registered_at: current_height,
+                name,
+            },
+        );
 
         log::info!("Validator {} registered with {} bond", pubkey, bond);
         Ok(())
@@ -188,7 +192,8 @@ impl ValidatorRegistry {
     ///   validator_reward = epoch_reward × (validator_bond / total_active_bond)
     pub fn distribute_rewards(&mut self, epoch_reward: Amount) -> Result<()> {
         // Compute total active bond for weighting.
-        let total_bond: u64 = self.validators
+        let total_bond: u64 = self
+            .validators
             .values()
             .filter(|v| v.is_eligible())
             .map(|v| v.bond.sats())
@@ -203,7 +208,8 @@ impl ValidatorRegistry {
         let total_reward = epoch_reward.sats();
         let mut distributed: u64 = 0;
 
-        let pubkeys: Vec<String> = self.validators
+        let pubkeys: Vec<String> = self
+            .validators
             .values()
             .filter(|v| v.is_eligible())
             .map(|v| v.pubkey.to_string())
@@ -212,10 +218,12 @@ impl ValidatorRegistry {
         for key in &pubkeys {
             if let Some(v) = self.validators.get_mut(key) {
                 let share = total_reward * v.bond.sats() / total_bond;
-                v.pending_rewards = v.pending_rewards
+                v.pending_rewards = v
+                    .pending_rewards
                     .checked_add(Amount(share))
                     .unwrap_or(v.pending_rewards);
-                v.lifetime_rewards = v.lifetime_rewards
+                v.lifetime_rewards = v
+                    .lifetime_rewards
                     .checked_add(Amount(share))
                     .unwrap_or(v.lifetime_rewards);
                 distributed += share;
@@ -234,7 +242,9 @@ impl ValidatorRegistry {
     /// Claim pending rewards for a validator.
     pub fn claim_rewards(&mut self, pubkey: &XOnlyPubKey) -> Result<Amount> {
         let key = pubkey.to_string();
-        let v = self.validators.get_mut(&key)
+        let v = self
+            .validators
+            .get_mut(&key)
             .ok_or_else(|| BtcFiError::UnknownValidator { pubkey: key })?;
 
         let claimed = v.pending_rewards;
@@ -248,18 +258,24 @@ impl ValidatorRegistry {
     /// `UNBONDING_DELAY_BLOCKS` the bond can be withdrawn.
     pub fn initiate_unbonding(
         &mut self,
-        pubkey:          &XOnlyPubKey,
-        current_height:  BlockHeight,
+        pubkey: &XOnlyPubKey,
+        current_height: BlockHeight,
     ) -> Result<BlockHeight> {
         let key = pubkey.to_string();
-        let v = self.validators.get_mut(&key)
+        let v = self
+            .validators
+            .get_mut(&key)
             .ok_or_else(|| BtcFiError::UnknownValidator { pubkey: key })?;
 
         v.status = ValidatorStatus::Unbonding {
             initiated_at: current_height,
         };
         let unlock_height = current_height.add_blocks(UNBONDING_DELAY_BLOCKS);
-        log::info!("Validator {} unbonding; can exit at {}", pubkey, unlock_height);
+        log::info!(
+            "Validator {} unbonding; can exit at {}",
+            pubkey,
+            unlock_height
+        );
         Ok(unlock_height)
     }
 
@@ -268,33 +284,39 @@ impl ValidatorRegistry {
     /// Only succeeds after `UNBONDING_DELAY_BLOCKS` have elapsed.
     pub fn complete_exit(
         &mut self,
-        pubkey:          &XOnlyPubKey,
-        current_height:  BlockHeight,
+        pubkey: &XOnlyPubKey,
+        current_height: BlockHeight,
     ) -> Result<Amount> {
         let key = pubkey.to_string();
-        let v = self.validators.get_mut(&key)
-            .ok_or_else(|| BtcFiError::UnknownValidator { pubkey: key.clone() })?;
+        let v = self
+            .validators
+            .get_mut(&key)
+            .ok_or_else(|| BtcFiError::UnknownValidator {
+                pubkey: key.clone(),
+            })?;
 
         let unlock_height = match v.status {
             ValidatorStatus::Unbonding { initiated_at } => {
                 initiated_at.add_blocks(UNBONDING_DELAY_BLOCKS)
             }
-            _ => return Err(BtcFiError::TimelockNotExpired {
-                current: current_height.0,
-                unlock:  0,
-            }),
+            _ => {
+                return Err(BtcFiError::TimelockNotExpired {
+                    current: current_height.0,
+                    unlock: 0,
+                })
+            }
         };
 
         if !current_height.is_past(unlock_height) {
             return Err(BtcFiError::TimelockNotExpired {
                 current: current_height.0,
-                unlock:  unlock_height.0,
+                unlock: unlock_height.0,
             });
         }
 
         let bond = v.bond;
         v.status = ValidatorStatus::Exited;
-        v.bond   = Amount(0);
+        v.bond = Amount(0);
         Ok(bond)
     }
 
@@ -316,7 +338,8 @@ impl ValidatorRegistry {
     /// Remove a validator from the registry.
     pub fn remove_validator(&mut self, pubkey: &XOnlyPubKey) -> Result<Validator> {
         let key = pubkey.to_string();
-        self.validators.remove(&key)
+        self.validators
+            .remove(&key)
             .ok_or_else(|| BtcFiError::UnknownValidator { pubkey: key })
     }
 
@@ -347,8 +370,10 @@ mod tests {
     #[test]
     fn register_and_count() {
         let mut reg = ValidatorRegistry::new();
-        reg.register(key(1), Amount(MIN_BOND_SATS), BlockHeight(0), None).unwrap();
-        reg.register(key(2), Amount(MIN_BOND_SATS * 2), BlockHeight(0), None).unwrap();
+        reg.register(key(1), Amount(MIN_BOND_SATS), BlockHeight(0), None)
+            .unwrap();
+        reg.register(key(2), Amount(MIN_BOND_SATS * 2), BlockHeight(0), None)
+            .unwrap();
         assert_eq!(reg.active_count(), 2);
     }
 
@@ -362,8 +387,10 @@ mod tests {
     #[test]
     fn rewards_distributed_proportionally() {
         let mut reg = ValidatorRegistry::new();
-        reg.register(key(1), Amount(MIN_BOND_SATS),     BlockHeight(0), None).unwrap();
-        reg.register(key(2), Amount(MIN_BOND_SATS * 3), BlockHeight(0), None).unwrap();
+        reg.register(key(1), Amount(MIN_BOND_SATS), BlockHeight(0), None)
+            .unwrap();
+        reg.register(key(2), Amount(MIN_BOND_SATS * 3), BlockHeight(0), None)
+            .unwrap();
 
         reg.distribute_rewards(Amount(100_000)).unwrap();
 
@@ -376,7 +403,8 @@ mod tests {
     #[test]
     fn unbonding_timelock_enforced() {
         let mut reg = ValidatorRegistry::new();
-        reg.register(key(1), Amount(MIN_BOND_SATS), BlockHeight(0), None).unwrap();
+        reg.register(key(1), Amount(MIN_BOND_SATS), BlockHeight(0), None)
+            .unwrap();
         reg.initiate_unbonding(&key(1), BlockHeight(0)).unwrap();
 
         // Cannot exit before the delay.
@@ -384,7 +412,9 @@ mod tests {
         assert!(matches!(result, Err(BtcFiError::TimelockNotExpired { .. })));
 
         // Can exit exactly at the delay.
-        let bond = reg.complete_exit(&key(1), BlockHeight(UNBONDING_DELAY_BLOCKS)).unwrap();
+        let bond = reg
+            .complete_exit(&key(1), BlockHeight(UNBONDING_DELAY_BLOCKS))
+            .unwrap();
         assert_eq!(bond.sats(), MIN_BOND_SATS);
     }
 }

@@ -9,8 +9,8 @@ use crate::{
     error::{BtcFiError, Result},
     types::{Script, XOnlyPubKey},
 };
-use bitcoin::script::Builder;
 use bitcoin::opcodes;
+use bitcoin::script::Builder;
 
 // ── Script Building ───────────────────────────────────────────────────────────
 
@@ -43,8 +43,7 @@ pub fn build_multisig_script(threshold: u8, pubkeys: &[XOnlyPubKey]) -> Result<S
         return Err(BtcFiError::InvalidMultisigParams);
     }
 
-    let mut builder = Builder::new()
-        .push_int(threshold as i64);
+    let mut builder = Builder::new().push_int(threshold as i64);
 
     for pk in pubkeys {
         let pk_bytes = bitcoin::key::XOnlyPublicKey::from_slice(&pk.0)

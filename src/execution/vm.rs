@@ -7,8 +7,8 @@
 
 use crate::{
     error::{BtcFiError, Result},
-    types::{Address, U256},
     execution::state::{L2State, L2Transaction},
+    types::{Address, U256},
 };
 
 // ── VM Opcodes ────────────────────────────────────────────────────────────────
