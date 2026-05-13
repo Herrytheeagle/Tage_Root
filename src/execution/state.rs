@@ -93,6 +93,16 @@ impl L2State {
         }
     }
 
+    /// Read a storage slot from the shared L2 state trie.
+    pub fn read_storage(&self, address: &Address, slot: &U256) -> U256 {
+        self.trie.get(address, slot)
+    }
+
+    /// Write a storage slot into the shared L2 state trie.
+    pub fn write_storage(&mut self, address: &Address, slot: &U256, value: U256) {
+        self.trie.set(address, slot, value);
+    }
+
     /// Apply a transaction to the state.
     pub fn apply_transaction(&mut self, tx: L2Transaction) -> Result<()> {
         // TODO: Execute transaction logic

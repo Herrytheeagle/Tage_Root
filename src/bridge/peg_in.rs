@@ -37,8 +37,9 @@ use crate::{
         ctv::{build_tapscript_ctv_leaf, CtvBridgeTemplate, CtvTemplate},
         taproot::{TapLeaf, TapTree, TaprootBuilder, NUMS_KEY},
     },
+    execution::state::L2State,
     error::{BtcFiError, Result},
-    types::{Amount, BlockHeight, DepositStatus, OutPoint, Script, TxOutput},
+    types::{Address, Amount, BlockHeight, DepositStatus, OutPoint, Script, TxOutput, U256},
 };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -231,6 +232,7 @@ impl PegInManager {
     /// broadcast (but not yet confirmed).
     pub fn register_deposit(
         &mut self,
+        state:             &mut L2State,
         outpoint:          OutPoint,
         amount:            Amount,
         l2_recipient:      String,
@@ -255,6 +257,16 @@ impl PegInManager {
             confirmed_height: None,
         };
         self.deposits.insert(key, deposit);
+
+        // Persist this deposit amount into the shared global L2 state root.
+        // This is a minimal wiring example showing that the bridge writes to
+        // shared state instead of only keeping an isolated HashMap.
+        let bridge_state_address = Address::zero();
+        let deposit_total_slot = U256::from_u64(1);
+        let previous_total = state.read_storage(&bridge_state_address, &deposit_total_slot);
+        let new_total = U256::from_u64(previous_total.as_u64().saturating_add(amount.sats()));
+        state.write_storage(&bridge_state_address, &deposit_total_slot, new_total);
+
         Ok(())
     }
 
@@ -297,7 +309,7 @@ impl PegInManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::TxId;
+    use crate::{execution::state::L2State, types::{Hash256, TxId}};
 
     fn test_outpoint() -> OutPoint {
         OutPoint { txid: TxId([1u8; 32]), vout: 0 }
@@ -326,6 +338,7 @@ mod tests {
     #[test]
     fn confirm_deposit_lifecycle() {
         let mut mgr = PegInManager::new();
+        let mut state = L2State::new();
         let op = test_outpoint();
 
         let (script, tmpl) = mgr
@@ -333,9 +346,10 @@ mod tests {
             .unwrap();
 
         mgr.register_deposit(
+            &mut state,
             op,
             Amount(500_000),
-            "alice".into(),
+            String::from("alice"),
             script,
             tmpl,
         ).unwrap();
@@ -347,5 +361,10 @@ mod tests {
         assert_eq!(recipient, "alice");
         assert_eq!(amount.sats(), 500_000);
         assert_eq!(mgr.total_locked_value().sats(), 500_000);
+
+        let bridge_state_address = Address::zero();
+        let deposit_total_slot = U256::from_u64(1);
+        assert_eq!(state.read_storage(&bridge_state_address, &deposit_total_slot).as_u64(), 500_000);
+        assert_ne!(state.trie.state_root(), Hash256([0u8; 32]));
     }
 }

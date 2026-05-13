@@ -39,7 +39,8 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use crate::{
     error::{BtcFiError, Result},
-    types::{Amount, BlockHeight},
+    execution::state::L2State,
+    types::{Address, Amount, BlockHeight, U256},
     yield_engine::interest_rate::*,
 };
 
@@ -146,6 +147,27 @@ impl LendingPool {
     /// interest proportionally to the share of capital that is deployed.
     pub fn supply_rate_bps(&self) -> u64 {
         supply_rate_bps(self.borrow_rate_bps(), self.utilisation_bps())
+    }
+
+    /// Read the current pool utilisation from the shared L2 state trie.
+    ///
+    /// This demonstrates wiring the lending pool to the global state root so
+    /// utilisation can be recomputed from shared execution state.
+    pub fn utilisation_bps_from_state(&self, state: &L2State) -> u64 {
+        let pool_address = Address::zero();
+        let total_deposits = state.read_storage(&pool_address, &U256::from_u64(1)).as_u64();
+        let total_borrows = state.read_storage(&pool_address, &U256::from_u64(2)).as_u64();
+        utilisation_bps(total_borrows, total_deposits)
+    }
+
+    /// Persist the pool's aggregate totals into shared L2 state.
+    ///
+    /// This is a minimal wiring example showing the bridge and lending pool
+    /// cooperating through the same state trie.
+    pub fn persist_totals_to_state(&self, state: &mut L2State) {
+        let pool_address = Address::zero();
+        state.write_storage(&pool_address, &U256::from_u64(1), U256::from_u64(self.total_deposits));
+        state.write_storage(&pool_address, &U256::from_u64(2), U256::from_u64(self.total_borrows));
     }
 
     // ── Deposits ────────────────────────────────────────────────────────────

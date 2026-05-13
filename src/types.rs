@@ -252,6 +252,18 @@ impl U256 {
         U256(bytes)
     }
 
+    pub fn from_u64(value: u64) -> Self {
+        let mut bytes = [0u8; 32];
+        bytes[24..32].copy_from_slice(&value.to_be_bytes());
+        U256(bytes)
+    }
+
+    pub fn as_u64(&self) -> u64 {
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(&self.0[24..32]);
+        u64::from_be_bytes(bytes)
+    }
+
     pub fn as_usize(&self) -> usize {
         // Convert last 8 bytes to usize
         let mut bytes = [0u8; 8];
