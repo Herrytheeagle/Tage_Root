@@ -6,11 +6,15 @@
 // Supports bridge operator, validator, and yield engine roles.
 
 use std::env;
+use tage::bridge::daemon::{BridgeDaemon, BridgeDaemonConfig};
 use tage::bridge::peg_in::PegInManager;
 use tage::bridge::peg_out::{PegOutManager, PegOutRequest, PEG_OUT_CONFIRMATION_DEPTH};
 use tage::error::Result;
 use tage::execution::state::L2State;
+use tage::staking::daemon::{ValidatorDaemon, ValidatorDaemonConfig};
+use tage::staking::validator::ValidatorRegistry;
 use tage::types::{Amount, BlockHeight, OutPoint, TxId, XOnlyPubKey};
+use tage::yield_engine::daemon::{YieldDaemon, YieldDaemonConfig};
 use tage::yield_engine::lending_pool::LendingPool;
 
 fn main() -> Result<()> {
@@ -36,27 +40,50 @@ fn main() -> Result<()> {
 }
 
 fn run_bridge_operator() -> Result<()> {
-    println!("Starting Tage Bridge Operator...");
-    // NOTE: out of scope for this diagnostic artefact (see WP2 Section X).
-    // Full daemon requires: P2P networking, Bitcoin block-watcher, sequencer RPC server,
-    // and a persistent operator key store — none are part of this prototype scope.
-    Ok(())
+    let config = BridgeDaemonConfig::from_env();
+    println!("Starting Tage Bridge Operator");
+    println!("  RPC endpoint : {}", config.rpc_url);
+    println!("  Poll interval: {}s", config.poll_interval_secs);
+    println!("  Confirm depth: {} blocks", config.confirmation_depth);
+    println!("  Set BITCOIN_RPC_URL / BITCOIN_RPC_USER / BITCOIN_RPC_PASS to override.");
+    println!();
+
+    let mut daemon = BridgeDaemon::new(
+        config,
+        PegInManager::new(),
+        PegOutManager::new(),
+        L2State::new(),
+    )?;
+    daemon.run()
 }
 
 fn run_validator() -> Result<()> {
-    println!("Starting Tage Validator...");
-    // NOTE: out of scope for this diagnostic artefact (see WP2 Section X).
-    // Full daemon requires: consensus messaging, slashing monitor, bond management loop,
-    // and a live Bitcoin node connection for block confirmation tracking.
-    Ok(())
+    let config = ValidatorDaemonConfig::from_env();
+    println!("Starting Tage Validator Daemon");
+    println!("  RPC endpoint  : {}", config.rpc_url);
+    println!("  Epoch length  : {} blocks (~{} hours)", config.epoch_blocks, config.epoch_blocks / 6);
+    println!("  Epoch reward  : {} sats", config.epoch_reward_sats);
+    println!("  Set TAGE_EPOCH_BLOCKS / TAGE_EPOCH_REWARD_SATS to override.");
+    println!();
+
+    let mut daemon = ValidatorDaemon::new(config, ValidatorRegistry::new())?;
+    daemon.run()
 }
 
 fn run_yield_engine() -> Result<()> {
-    println!("Starting Tage Yield Engine...");
-    // NOTE: out of scope for this diagnostic artefact (see WP2 Section X).
-    // Full daemon requires: interest accrual cron, liquidation watcher, oracle price feeds,
-    // and an API layer for borrowers and liquidity providers.
-    Ok(())
+    let config = YieldDaemonConfig::from_env();
+    println!("Starting Tage Yield Engine Daemon");
+    println!("  RPC endpoint : {}", config.rpc_url);
+    println!("  Poll interval: {}s", config.poll_interval_secs);
+    println!("  Set BITCOIN_RPC_URL / BITCOIN_RPC_USER / BITCOIN_RPC_PASS to override.");
+    println!();
+
+    let mut daemon = YieldDaemon::new(
+        config,
+        LendingPool::new(BlockHeight(0)),
+        L2State::new(),
+    )?;
+    daemon.run()
 }
 fn run_demo() -> Result<()> {
     println!("Running Tage end-to-end demo...");

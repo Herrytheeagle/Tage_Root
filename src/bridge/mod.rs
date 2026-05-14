@@ -6,12 +6,14 @@
 // Implements L2 of the six-layer framework.
 
 pub mod bitvm_bridge;
+pub mod daemon;
 pub mod peg_in;
 pub mod peg_out;
 pub mod rpc;
 
 // Re-export key types
 pub use bitvm_bridge::*;
+pub use daemon::*;
 pub use peg_in::*;
 pub use peg_out::*;
 pub use rpc::*;

@@ -245,6 +245,26 @@ impl PegOutManager {
             .into_script())
     }
 
+    /// Return all peg-out requests that are still pending finalisation.
+    ///
+    /// Used by the bridge daemon to find requests that have matured.
+    pub fn pending_requests(&self) -> Vec<&PegOutRequest> {
+        self.requests.values().collect()
+    }
+
+    /// Build the unsigned peg-out transaction for a pending request.
+    ///
+    /// Must be called **before** `finalise_peg_out` — finalisation moves the
+    /// request out of the pending map, making it unavailable here.
+    pub fn build_peg_out_tx(&self, deposit_outpoint: &OutPoint) -> Result<BtcTransaction> {
+        let key = deposit_outpoint.to_string();
+        let request = self
+            .requests
+            .get(&key)
+            .ok_or_else(|| BtcFiError::PegOutNotFound { txid: key.clone() })?;
+        self.build_unsigned_tx(request, request.recipient)
+    }
+
     /// Emergency exit for stuck deposits.
     ///
     /// After timelock expires, allows direct claim without L2 proof.

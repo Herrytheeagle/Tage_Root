@@ -288,6 +288,16 @@ impl PegInManager {
         Ok((deposit.l2_recipient.clone(), deposit.amount))
     }
 
+    /// Return all deposits that are still awaiting on-chain confirmation.
+    ///
+    /// Used by the bridge daemon to know which scripts to watch.
+    pub fn pending_deposits(&self) -> Vec<&Deposit> {
+        self.deposits
+            .values()
+            .filter(|d| matches!(d.status, DepositStatus::Pending))
+            .collect()
+    }
+
     /// Look up a deposit by outpoint.
     pub fn get_deposit(&self, outpoint: &OutPoint) -> Option<&Deposit> {
         self.deposits.get(&outpoint.to_string())
