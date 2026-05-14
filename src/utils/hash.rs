@@ -31,7 +31,9 @@ use sha2::{Digest, Sha256};
 ///
 /// # Example
 /// ```
-/// let txid_bytes = sha256d(serialised_transaction);
+/// use tage::utils::sha256d;
+/// let hash = sha256d(b"hello bitcoin");
+/// assert_eq!(hash.0.len(), 32);
 /// ```
 pub fn sha256d(data: &[u8]) -> Hash256 {
     let first = Sha256::digest(data);

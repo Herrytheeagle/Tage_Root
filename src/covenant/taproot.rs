@@ -187,17 +187,24 @@ impl TaprootOutput {
 /// Constructs a `TaprootOutput` from an internal key and an optional script tree.
 ///
 /// # Example — build the BTCFi bridge peg output
-/// ```rust
-/// // Two CTV leaf scripts built by `build_tapscript_ctv_leaf`
-/// let sequencer_leaf = TapLeaf::new(sequencer_ctv_script);
-/// let exit_leaf      = TapLeaf::new(exit_ctv_script);
+/// ```
+/// use tage::covenant::taproot::{TapLeaf, TapTree, TaprootBuilder, NUMS_KEY};
+/// use tage::Script;
+///
+/// let sequencer_leaf = TapLeaf::new(Script(vec![0xb0]));
+/// let exit_leaf      = TapLeaf::new(Script(vec![0xb1]));
 ///
 /// let peg_output = TaprootBuilder::new(NUMS_KEY)
 ///     .add_tree(TapTree::Branch(
 ///         Box::new(TapTree::Leaf(sequencer_leaf)),
 ///         Box::new(TapTree::Leaf(exit_leaf)),
 ///     ))
-///     .build()?;
+///     .build()
+///     .unwrap();
+///
+/// let spk = peg_output.script_pubkey();
+/// assert_eq!(spk.len(), 34);
+/// assert_eq!(spk.as_bytes()[0], 0x51); // OP_1
 /// ```
 pub struct TaprootBuilder {
     internal_key: XOnlyPubKey,
