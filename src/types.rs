@@ -278,35 +278,122 @@ impl U256 {
     }
 }
 
+// ── U256 arithmetic helpers ───────────────────────────────────────────────────
+//
+// U256 bytes are big-endian: self.0[0] is the most significant byte.
+// Limbs are little-endian order: limb[0] = least-significant 64 bits (bytes 24..32).
+
+fn u256_to_limbs(x: [u8; 32]) -> [u64; 4] {
+    let mut limbs = [0u64; 4];
+    for i in 0..4 {
+        let start = (3 - i) * 8;
+        let mut buf = [0u8; 8];
+        buf.copy_from_slice(&x[start..start + 8]);
+        limbs[i] = u64::from_be_bytes(buf);
+    }
+    limbs
+}
+
+fn u256_from_limbs(limbs: [u64; 4]) -> [u8; 32] {
+    let mut bytes = [0u8; 32];
+    for i in 0..4 {
+        let start = (3 - i) * 8;
+        bytes[start..start + 8].copy_from_slice(&limbs[i].to_be_bytes());
+    }
+    bytes
+}
+
+fn u256_shl1(x: [u8; 32]) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    for i in 0..32 {
+        out[i] = (x[i] << 1) | if i + 1 < 32 { x[i + 1] >> 7 } else { 0 };
+    }
+    out
+}
+
+fn u256_get_bit(x: &[u8; 32], bit: usize) -> bool {
+    (x[31 - bit / 8] >> (bit % 8)) & 1 == 1
+}
+
+fn u256_set_bit(x: &mut [u8; 32], bit: usize) {
+    x[31 - bit / 8] |= 1 << (bit % 8);
+}
+
 impl std::ops::Add for U256 {
     type Output = Self;
-    fn add(self, _rhs: Self) -> Self {
-        // Simple addition (placeholder)
-        self
+    fn add(self, rhs: Self) -> Self {
+        let a = u256_to_limbs(self.0);
+        let b = u256_to_limbs(rhs.0);
+        let mut result = [0u64; 4];
+        let mut carry = 0u64;
+        for i in 0..4 {
+            let (s1, c1) = a[i].overflowing_add(b[i]);
+            let (s2, c2) = s1.overflowing_add(carry);
+            result[i] = s2;
+            carry = c1 as u64 + c2 as u64;
+        }
+        U256(u256_from_limbs(result))
     }
 }
 
 impl std::ops::Sub for U256 {
     type Output = Self;
-    fn sub(self, _rhs: Self) -> Self {
-        // Simple subtraction (placeholder)
-        self
+    fn sub(self, rhs: Self) -> Self {
+        let a = u256_to_limbs(self.0);
+        let b = u256_to_limbs(rhs.0);
+        let mut result = [0u64; 4];
+        let mut borrow = 0u64;
+        for i in 0..4 {
+            let (d1, b1) = a[i].overflowing_sub(b[i]);
+            let (d2, b2) = d1.overflowing_sub(borrow);
+            result[i] = d2;
+            borrow = b1 as u64 + b2 as u64;
+        }
+        U256(u256_from_limbs(result))
     }
 }
 
 impl std::ops::Mul for U256 {
     type Output = Self;
-    fn mul(self, _rhs: Self) -> Self {
-        // Simple multiplication (placeholder)
-        self
+    fn mul(self, rhs: Self) -> Self {
+        let a = u256_to_limbs(self.0);
+        let b = u256_to_limbs(rhs.0);
+        let mut result = [0u64; 4];
+        for i in 0..4 {
+            let mut carry: u128 = 0;
+            for j in 0..(4 - i) {
+                let idx = i + j;
+                let prod = (a[i] as u128) * (b[j] as u128)
+                    + result[idx] as u128
+                    + carry;
+                result[idx] = prod as u64;
+                carry = prod >> 64;
+            }
+        }
+        U256(u256_from_limbs(result))
     }
 }
 
 impl std::ops::Div for U256 {
     type Output = Self;
-    fn div(self, _rhs: Self) -> Self {
-        // Simple division (placeholder)
-        self
+    fn div(self, rhs: Self) -> Self {
+        if rhs == U256::zero() {
+            return U256::zero(); // VM op_div checks for zero before delegating here
+        }
+        let mut quotient = [0u8; 32];
+        let mut remainder = U256::zero();
+        for bit in (0..256).rev() {
+            let mut rem = u256_shl1(remainder.0);
+            if u256_get_bit(&self.0, bit) {
+                rem[31] |= 1;
+            }
+            remainder = U256(rem);
+            if remainder >= rhs {
+                remainder = remainder - rhs;
+                u256_set_bit(&mut quotient, bit);
+            }
+        }
+        U256(quotient)
     }
 }
 

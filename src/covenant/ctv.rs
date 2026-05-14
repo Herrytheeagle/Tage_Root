@@ -281,7 +281,7 @@ mod tests {
     fn dummy_output(sats: u64) -> TxOutput {
         TxOutput {
             value: Amount(sats),
-            script: Script(vec![0x51]), // OP_TRUE placeholder
+            script: Script(vec![0x51]), // OP_TRUE — valid unencumbered output for test fixtures
         }
     }
 

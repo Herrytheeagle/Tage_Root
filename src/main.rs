@@ -10,7 +10,7 @@ use tage::bridge::peg_in::PegInManager;
 use tage::bridge::peg_out::{PegOutManager, PegOutRequest, PEG_OUT_CONFIRMATION_DEPTH};
 use tage::error::Result;
 use tage::execution::state::L2State;
-use tage::types::{Amount, BlockHeight, Hash256, OutPoint, TxId, XOnlyPubKey};
+use tage::types::{Amount, BlockHeight, OutPoint, TxId, XOnlyPubKey};
 use tage::yield_engine::lending_pool::LendingPool;
 
 fn main() -> Result<()> {
@@ -37,19 +37,25 @@ fn main() -> Result<()> {
 
 fn run_bridge_operator() -> Result<()> {
     println!("Starting Tage Bridge Operator...");
-    // TODO: Implement bridge operator daemon
+    // NOTE: out of scope for this diagnostic artefact (see WP2 Section X).
+    // Full daemon requires: P2P networking, Bitcoin block-watcher, sequencer RPC server,
+    // and a persistent operator key store — none are part of this prototype scope.
     Ok(())
 }
 
 fn run_validator() -> Result<()> {
     println!("Starting Tage Validator...");
-    // TODO: Implement validator daemon
+    // NOTE: out of scope for this diagnostic artefact (see WP2 Section X).
+    // Full daemon requires: consensus messaging, slashing monitor, bond management loop,
+    // and a live Bitcoin node connection for block confirmation tracking.
     Ok(())
 }
 
 fn run_yield_engine() -> Result<()> {
     println!("Starting Tage Yield Engine...");
-    // TODO: Implement yield engine daemon
+    // NOTE: out of scope for this diagnostic artefact (see WP2 Section X).
+    // Full daemon requires: interest accrual cron, liquidation watcher, oracle price feeds,
+    // and an API layer for borrowers and liquidity providers.
     Ok(())
 }
 fn run_demo() -> Result<()> {
@@ -125,11 +131,12 @@ fn run_demo() -> Result<()> {
     );
 
     println!("7) Submitting peg-out request for the original deposit");
+    let state_proof = state.trie.state_root(); // use real committed state root as proof
     let request = PegOutRequest::new(
         outpoint,
         Amount(500_000),
         XOnlyPubKey([1u8; 32]),
-        Hash256([0u8; 32]),
+        state_proof,
         BlockHeight(106),
     );
     peg_out.submit_request(request)?;

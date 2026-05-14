@@ -61,12 +61,17 @@ pub fn build_multisig_script(threshold: u8, pubkeys: &[XOnlyPubKey]) -> Result<S
 
 // ── Script Parsing ────────────────────────────────────────────────────────────
 
-/// Parse a script to extract the public key from P2TR.
+/// Parse a P2TR script and extract the x-only public key.
+///
+/// A P2TR scriptPubKey is exactly 34 bytes: `OP_1 (0x51) | OP_PUSHBYTES_32 (0x20) | <32-byte key>`.
 pub fn parse_p2tr_script(script: &Script) -> Result<XOnlyPubKey> {
-    let _bitcoin_script = bitcoin::Script::from_bytes(&script.0);
-    // TODO: Parse P2TR script
-    // Placeholder
-    Ok(XOnlyPubKey([0u8; 32]))
+    let b = &script.0;
+    if b.len() != 34 || b[0] != 0x51 || b[1] != 0x20 {
+        return Err(BtcFiError::InvalidScript);
+    }
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&b[2..34]);
+    Ok(XOnlyPubKey(key))
 }
 
 /// Validate a script for correctness.

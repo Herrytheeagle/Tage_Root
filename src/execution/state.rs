@@ -7,6 +7,7 @@
 
 use crate::{
     error::Result,
+    execution::vm::VM,
     types::{Address, Hash256, U256},
     utils::hash::sha256d,
 };
@@ -140,10 +141,16 @@ impl L2State {
         self.trie.set(address, slot, value);
     }
 
-    /// Apply a transaction to the state.
+    /// Apply a transaction to the state by executing its bytecode through the VM.
+    ///
+    /// If `tx.data` is non-empty it is treated as contract bytecode and run
+    /// against this state with `tx.to` as the contract address for SLOAD/SSTORE.
+    /// Value-transfer-only transactions (empty data) are recorded without VM execution.
     pub fn apply_transaction(&mut self, tx: L2Transaction) -> Result<()> {
-        // TODO: Execute transaction logic
-        // For now, just add to pending
+        if !tx.data.is_empty() {
+            let mut vm = VM::new(tx.data.clone()).with_address(tx.to);
+            vm.execute(&tx.data, self)?;
+        }
         self.pending_txs.push(tx);
         Ok(())
     }

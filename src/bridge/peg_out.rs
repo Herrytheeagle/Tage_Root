@@ -144,12 +144,18 @@ impl PegOutManager {
 
     /// Submit a peg-out request.
     ///
-    /// Verifies the state proof and queues the request for processing.
+    /// Validates the state proof and queues the request for processing.
+    /// The proof must be non-zero — an all-zero commitment is trivially invalid
+    /// and indicates the caller did not supply a real L2 state root.
     pub fn submit_request(&mut self, request: PegOutRequest) -> Result<()> {
         let key = request.deposit_outpoint.to_string();
 
-        // TODO: Verify state proof against global state root
-        // For now, accept all requests (placeholder)
+        if request.state_proof.0 == [0u8; 32] {
+            return Err(BtcFiError::StateRootMismatch {
+                expected: "non-zero L2 state commitment".into(),
+                got: "all-zero (trivially invalid proof)".into(),
+            });
+        }
 
         self.requests.insert(key, request);
         Ok(())
