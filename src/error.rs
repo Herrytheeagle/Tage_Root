@@ -153,6 +153,10 @@ pub enum BtcFiError {
     /// Wraps JSON (de)serialisation failures for state persistence.
     #[error("State store JSON error: {0}")]
     Json(#[from] serde_json::Error),
+
+    /// Wraps Bitcoin RPC errors (node connectivity, broadcast failures, etc.).
+    #[error("Bitcoin RPC error: {0}")]
+    BitcoinRpc(String),
 }
 
 /// Convenience alias used throughout the crate.

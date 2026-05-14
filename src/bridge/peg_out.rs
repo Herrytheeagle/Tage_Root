@@ -6,6 +6,7 @@
 // Implements the exit path for trust-minimised bridging (L2).
 
 use crate::{
+    bridge::rpc::BtcRpcClient,
     error::{BtcFiError, Result},
     types::{Amount, BlockHeight, Hash256, OutPoint, TxId, XOnlyPubKey},
 };
@@ -73,18 +74,72 @@ impl PegOutRequest {
 // ── Peg-Out Manager ───────────────────────────────────────────────────────────
 
 /// Manages peg-out requests and finalisation.
-#[derive(Debug, Default)]
 pub struct PegOutManager {
     /// Pending peg-out requests, keyed by deposit outpoint.
     requests: std::collections::HashMap<String, PegOutRequest>,
 
     /// Finalised peg-outs, keyed by mainnet txid.
     finalised: std::collections::HashMap<String, TxId>,
+
+    /// Optional live connection to a Bitcoin Core node.
+    rpc: Option<BtcRpcClient>,
+}
+
+impl std::fmt::Debug for PegOutManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PegOutManager")
+            .field("requests", &self.requests)
+            .field("finalised", &self.finalised)
+            .field("has_rpc", &self.rpc.is_some())
+            .finish()
+    }
+}
+
+impl Default for PegOutManager {
+    fn default() -> Self {
+        Self {
+            requests: std::collections::HashMap::new(),
+            finalised: std::collections::HashMap::new(),
+            rpc: None,
+        }
+    }
 }
 
 impl PegOutManager {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Attach a live Bitcoin Core RPC connection to this manager.
+    ///
+    /// Once set, `broadcast_peg_out_tx` and `check_confirmations` become
+    /// functional against the real network.
+    pub fn with_rpc(mut self, client: BtcRpcClient) -> Self {
+        self.rpc = Some(client);
+        self
+    }
+
+    /// Broadcast a signed peg-out transaction to the Bitcoin network.
+    ///
+    /// Requires an RPC client to have been attached via `with_rpc`.
+    /// Returns the txid confirmed by the node.
+    pub fn broadcast_peg_out_tx(&self, tx: &BtcTransaction) -> Result<TxId> {
+        let rpc = self
+            .rpc
+            .as_ref()
+            .ok_or_else(|| BtcFiError::BitcoinRpc("no RPC client configured".into()))?;
+        rpc.broadcast_tx(tx)
+    }
+
+    /// Query the confirmation count for a finalised peg-out txid.
+    ///
+    /// Requires an RPC client to have been attached via `with_rpc`.
+    pub fn check_confirmations(&self, txid: &TxId) -> Result<u32> {
+        let rpc = self
+            .rpc
+            .as_ref()
+            .ok_or_else(|| BtcFiError::BitcoinRpc("no RPC client configured".into()))?;
+        rpc.get_confirmations(txid)
     }
 
     /// Submit a peg-out request.
