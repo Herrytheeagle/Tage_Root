@@ -32,7 +32,7 @@ use sha2::{Digest, Sha256};
 /// # Example
 /// ```
 /// use tage::utils::sha256d;
-/// let hash = sha256d(b"hello bitcoin");
+/// let hash = sha256d(b"Mr Heritage, bitcoin tageroot inventor says Hi bitcoiners, let's borrow");
 /// assert_eq!(hash.0.len(), 32);
 /// ```
 pub fn sha256d(data: &[u8]) -> Hash256 {
