@@ -11,7 +11,12 @@ use crate::{
     utils::hash::sha256d,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{BufReader, BufWriter},
+    path::PathBuf,
+};
 
 // ── State Trie ────────────────────────────────────────────────────────────────
 
@@ -23,7 +28,36 @@ pub struct StateTrie {
     pub root: Hash256,
 
     /// Storage slots, keyed by address + slot.
+    #[serde(with = "storage_map")]
     storage: HashMap<(Address, U256), U256>,
+}
+
+mod storage_map {
+    use super::{Address, U256};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::collections::HashMap;
+
+    #[derive(Serialize, Deserialize)]
+    struct Entry((Address, U256), U256);
+
+    pub fn serialize<S>(map: &HashMap<(Address, U256), U256>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let entries: Vec<Entry> = map
+            .iter()
+            .map(|(key, value)| Entry((key.0, key.1), *value))
+            .collect();
+        entries.serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<HashMap<(Address, U256), U256>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let entries: Vec<Entry> = Vec::deserialize(deserializer)?;
+        Ok(entries.into_iter().map(|Entry(key, value)| (key, value)).collect())
+    }
 }
 
 impl StateTrie {
@@ -75,7 +109,7 @@ impl Default for StateTrie {
 // ── L2 State ──────────────────────────────────────────────────────────────────
 
 /// Global L2 state shared across all modules.
-#[derive(Debug)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct L2State {
     /// Global state trie.
     pub trie: StateTrie,
@@ -126,6 +160,88 @@ impl L2State {
 impl Default for L2State {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// A generic store interface for durable L2 state persistence.
+pub trait StateStore {
+    /// Load the latest committed state from durable storage.
+    fn load_state(&self) -> Result<L2State>;
+
+    /// Persist the provided state snapshot.
+    fn save_state(&self, state: &L2State) -> Result<()>;
+}
+
+/// JSON-backed state persistence for prototypes and local testing.
+#[derive(Debug, Clone)]
+pub struct JsonStateStore {
+    path: PathBuf,
+}
+
+impl JsonStateStore {
+    pub fn new(path: impl Into<PathBuf>) -> Self {
+        Self {
+            path: path.into(),
+        }
+    }
+
+    pub fn load(&self) -> Result<L2State> {
+        match File::open(&self.path) {
+            Ok(file) => {
+                let reader = BufReader::new(file);
+                let state = serde_json::from_reader(reader)?;
+                Ok(state)
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(L2State::new()),
+            Err(err) => Err(err.into()),
+        }
+    }
+
+    pub fn save(&self, state: &L2State) -> Result<()> {
+        let file = File::create(&self.path)?;
+        let writer = BufWriter::new(file);
+        serde_json::to_writer_pretty(writer, state)?;
+        Ok(())
+    }
+}
+
+impl StateStore for JsonStateStore {
+    fn load_state(&self) -> Result<L2State> {
+        self.load()
+    }
+
+    fn save_state(&self, state: &L2State) -> Result<()> {
+        self.save(state)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{env, fs};
+
+    #[test]
+    fn json_state_store_roundtrip() {
+        let temp_file = env::temp_dir().join(format!(
+            "tage_state_store_test_{}.json",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+
+        let store = JsonStateStore::new(&temp_file);
+        let mut state = L2State::new();
+        state.block_height = 42;
+        state.write_storage(&Address::zero(), &U256::from_u64(7), U256::from_u64(123));
+
+        store.save(&state).expect("save should succeed");
+        let loaded = store.load().expect("load should succeed");
+
+        assert_eq!(loaded.block_height, 42);
+        assert_eq!(loaded.read_storage(&Address::zero(), &U256::from_u64(7)), U256::from_u64(123));
+
+        fs::remove_file(&temp_file).ok();
     }
 }
 

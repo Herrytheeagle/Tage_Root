@@ -149,6 +149,10 @@ pub enum BtcFiError {
     /// Wraps hex-decode failures on script and hash inputs.
     #[error("Hex decode error: {0}")]
     HexDecode(#[from] hex::FromHexError),
+
+    /// Wraps JSON (de)serialisation failures for state persistence.
+    #[error("State store JSON error: {0}")]
+    Json(#[from] serde_json::Error),
 }
 
 /// Convenience alias used throughout the crate.
