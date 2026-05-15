@@ -53,9 +53,9 @@ impl BridgeDaemonConfig {
             rpc_url: std::env::var("BITCOIN_RPC_URL")
                 .unwrap_or_else(|_| "http://127.0.0.1:18443".into()),
             rpc_user: std::env::var("BITCOIN_RPC_USER")
-                .unwrap_or_else(|_| "bitcoin".into()),
+                .unwrap_or_else(|_| "heritage".into()),
             rpc_pass: std::env::var("BITCOIN_RPC_PASS")
-                .unwrap_or_else(|_| "bitcoin".into()),
+                .unwrap_or_else(|_| "tageroot2024".into()),
             poll_interval_secs: std::env::var("TAGE_POLL_INTERVAL")
                 .ok()
                 .and_then(|s| s.parse().ok())

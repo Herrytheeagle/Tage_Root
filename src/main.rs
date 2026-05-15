@@ -9,6 +9,7 @@ use std::env;
 use tage::bridge::daemon::{BridgeDaemon, BridgeDaemonConfig};
 use tage::bridge::peg_in::PegInManager;
 use tage::bridge::peg_out::{PegOutManager, PegOutRequest, PEG_OUT_CONFIRMATION_DEPTH};
+use tage::bridge::rpc::BtcRpcClient;
 use tage::error::Result;
 use tage::execution::state::L2State;
 use tage::staking::daemon::{ValidatorDaemon, ValidatorDaemonConfig};
@@ -86,14 +87,32 @@ fn run_yield_engine() -> Result<()> {
     daemon.run()
 }
 fn run_demo() -> Result<()> {
-    println!("Running Tage end-to-end demo...");
+    println!("Running Tage end-to-end demo (live regtest node)...");
 
-    let mut state = L2State::new();
-    let mut peg_in = PegInManager::new();
-    let mut lending_pool = LendingPool::new(BlockHeight(0));
-    let mut peg_out = PegOutManager::new();
+    // ── Connect to the live Bitcoin Core regtest node ─────────────────────────
+    let rpc_url = std::env::var("BITCOIN_RPC_URL")
+        .unwrap_or_else(|_| "http://127.0.0.1:18443".into());
+    let rpc_user = std::env::var("BITCOIN_RPC_USER")
+        .unwrap_or_else(|_| "heritage".into());
+    let rpc_pass = std::env::var("BITCOIN_RPC_PASS")
+        .unwrap_or_else(|_| "tageroot2024".into());
 
-    let current_height = BlockHeight(100);
+    let rpc = BtcRpcClient::new(&rpc_url, &rpc_user, &rpc_pass)?;
+    let chain_tip = rpc.get_block_count()?;
+    println!("Connected to Bitcoin Core at {}", rpc_url);
+    println!("Chain tip  : block {}", chain_tip);
+    println!();
+
+    // Derive demo block heights from the live chain tip.
+    let current_height  = BlockHeight(chain_tip as u32);
+    let confirm_height  = BlockHeight(chain_tip as u32 + 6);
+    let finalise_height = BlockHeight(chain_tip as u32 + 6 + PEG_OUT_CONFIRMATION_DEPTH);
+
+    let mut state        = L2State::new();
+    let mut peg_in       = PegInManager::new();
+    let mut lending_pool = LendingPool::new(current_height);
+    let mut peg_out      = PegOutManager::new().with_rpc(rpc);
+
     let deposit_amount = Amount(1_000_000);
     let outpoint = OutPoint {
         txid: TxId([42u8; 32]),
@@ -104,8 +123,9 @@ fn run_demo() -> Result<()> {
     let (peg_script, bridge_template) =
         peg_in.create_peg_address("Heritage", deposit_amount, current_height)?;
     println!(
-        "   Peg-in address ready. Deposit amount = {} sats",
-        deposit_amount.sats()
+        "   Peg-in address ready. Deposit = {} sats  (height {})",
+        deposit_amount.sats(),
+        current_height.0,
     );
 
     println!("2) Registering deposit in bridge state and shared L2 trie");
@@ -123,8 +143,8 @@ fn run_demo() -> Result<()> {
         state.trie.state_root()
     );
 
-    println!("3) Confirming deposit and crediting L2");
-    let (recipient, amount) = peg_in.confirm_deposit(&outpoint, BlockHeight(106))?;
+    println!("3) Confirming deposit and crediting L2  (simulated +6 blocks → height {})", confirm_height.0);
+    let (recipient, amount) = peg_in.confirm_deposit(&outpoint, confirm_height)?;
     println!(
         "   Confirmed deposit for {} with {} sats",
         recipient,
@@ -132,7 +152,7 @@ fn run_demo() -> Result<()> {
     );
 
     println!("4) Depositing the credited amount into the lending pool");
-    lending_pool.deposit("Heritage".into(), amount, BlockHeight(106))?;
+    lending_pool.deposit("Heritage".into(), amount, confirm_height)?;
     println!(
         "   Lending pool utilisation = {} bps",
         lending_pool.utilisation_bps()
@@ -143,7 +163,7 @@ fn run_demo() -> Result<()> {
         "panda".into(),
         Amount(500_000),
         Amount(750_000),
-        BlockHeight(106),
+        confirm_height,
     )?;
     println!(
         "   Borrow succeeded; utilisation = {} bps",
@@ -157,23 +177,40 @@ fn run_demo() -> Result<()> {
         state.trie.state_root()
     );
 
-    println!("7) Submitting peg-out request for the original deposit");
-    let state_proof = state.trie.state_root(); // use real committed state root as proof
+    println!("7) Submitting peg-out request");
+    let state_proof = state.trie.state_root();
     let request = PegOutRequest::new(
         outpoint,
         Amount(500_000),
         XOnlyPubKey([1u8; 32]),
         state_proof,
-        BlockHeight(106),
+        confirm_height,
     );
     peg_out.submit_request(request)?;
-    println!("   Peg-out request queued");
+    println!("   Peg-out request queued  (state root = {})", state_proof);
 
-    println!("8) Finalising peg-out after confirmation depth");
-    let final_txid =
-        peg_out.finalise_peg_out(&outpoint, BlockHeight(106 + PEG_OUT_CONFIRMATION_DEPTH))?;
-    println!("   Peg-out transaction ID = {}", final_txid);
+    println!("8) Building peg-out Bitcoin transaction");
+    let tx = peg_out.build_peg_out_tx(&outpoint)?;
+    println!(
+        "   Transaction built — {} input(s), {} output(s)",
+        tx.input.len(),
+        tx.output.len()
+    );
 
+    println!("9) Finalising peg-out  (simulated height {})", finalise_height.0);
+    let final_txid = peg_out.finalise_peg_out(&outpoint, finalise_height)?;
+    println!("   Local peg-out txid = {}", final_txid);
+
+    println!("10) Broadcasting transaction to regtest node at {}", rpc_url);
+    match peg_out.broadcast_peg_out_tx(&tx) {
+        Ok(node_txid) => println!("    Broadcast accepted — node txid: {}", node_txid),
+        Err(e) => println!(
+            "    Broadcast rejected (unsigned demo tx — expected on regtest): {}",
+            e
+        ),
+    }
+
+    println!();
     println!("Demo complete.");
     Ok(())
 }

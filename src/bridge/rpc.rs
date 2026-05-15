@@ -115,3 +115,85 @@ impl BtcRpcClient {
         Ok(info.confirmations.unwrap_or(0))
     }
 }
+
+// =============================================================================
+// Integration tests — require a live Bitcoin Core regtest node.
+//
+// Start node:
+//   bitcoind -regtest -rpcuser=heritage -rpcpassword=tageroot2024 -rpcport=18443 \
+//            -txindex=1 -daemon
+//   bitcoin-cli -regtest -rpcuser=heritage -rpcpassword=tageroot2024 \
+//            -rpcport=18443 createwallet tage
+//   bitcoin-cli -regtest -rpcuser=heritage -rpcpassword=tageroot2024 \
+//            -rpcport=18443 -generate 101
+//
+// Run with:  cargo test -- --ignored
+// =============================================================================
+#[cfg(test)]
+mod integration {
+    use super::*;
+
+    fn regtest_client() -> BtcRpcClient {
+        BtcRpcClient::new("http://127.0.0.1:18443", "heritage", "tageroot2024")
+            .expect("connect to regtest node — start bitcoind first (see comment above)")
+    }
+
+    #[test]
+    #[ignore = "requires live regtest node at 127.0.0.1:18443"]
+    fn regtest_get_block_count() {
+        let rpc = regtest_client();
+        let height = rpc.get_block_count().unwrap();
+        assert!(
+            height >= 101,
+            "need at least 101 blocks — run: bitcoin-cli -regtest -generate 101"
+        );
+        println!("regtest chain tip: block {}", height);
+    }
+
+    #[test]
+    #[ignore = "requires live regtest node at 127.0.0.1:18443"]
+    fn regtest_scan_unused_script_is_empty() {
+        let rpc = regtest_client();
+        // P2TR script paying to an all-0xff 32-byte key — never funded on a fresh regtest chain.
+        let mut script = vec![0x51u8, 0x20];
+        script.extend_from_slice(&[0xffu8; 32]);
+        let utxos = rpc.scan_utxos_for_script(&script).unwrap();
+        assert!(
+            utxos.is_empty(),
+            "expected no UTXOs for an unused key; found {}",
+            utxos.len()
+        );
+    }
+
+    #[test]
+    #[ignore = "requires live regtest node at 127.0.0.1:18443"]
+    fn regtest_broadcast_rejects_invalid_tx() {
+        use bitcoin::{
+            transaction::Version, Amount as BtcAmount, OutPoint as BtcOutPoint,
+            ScriptBuf, Sequence, Transaction, TxIn, TxOut, Witness,
+        };
+
+        let rpc = regtest_client();
+        // An empty-input transaction is always rejected by the node.
+        let bad_tx = Transaction {
+            version: Version::TWO,
+            lock_time: bitcoin::absolute::LockTime::ZERO,
+            input: vec![TxIn {
+                previous_output: BtcOutPoint::null(),
+                script_sig: ScriptBuf::new(),
+                sequence: Sequence::MAX,
+                witness: Witness::new(),
+            }],
+            output: vec![TxOut {
+                value: BtcAmount::from_sat(0),
+                script_pubkey: ScriptBuf::new(),
+            }],
+        };
+        let result = rpc.broadcast_tx(&bad_tx);
+        assert!(
+            result.is_err(),
+            "node should reject an invalid transaction"
+        );
+        println!("broadcast correctly rejected: {}", result.unwrap_err());
+    }
+}
