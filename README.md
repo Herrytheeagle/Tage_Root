@@ -81,9 +81,6 @@ tage/
 ├── Cargo.toml
 ├── README.md
 ├── LICENSE
-├── docs/
-│   ├── architecture.md
-│   └── bip_references.md
 ├── src/
 │   ├── main.rs                  # Entry point and CLI demo
 │   ├── lib.rs                   # Crate root, module declarations
@@ -93,7 +90,9 @@ tage/
 │   │   ├── mod.rs               # Bridge module root
 │   │   ├── peg_in.rs            # Peg-in: lock BTC → mint L2 position
 │   │   ├── peg_out.rs           # Peg-out: burn L2 position → unlock BTC
-│   │   └── bitvm_bridge.rs      # Path B: BitVM optimistic bridge
+│   │   ├── bitvm_bridge.rs      # Path B: BitVM optimistic bridge
+│   │   ├── daemon.rs            # Bridge operator daemon (polls Bitcoin Core)
+│   │   └── rpc.rs               # Bitcoin RPC client wrapper
 │   ├── covenant/
 │   │   ├── mod.rs               # Covenant module root
 │   │   ├── ctv.rs               # BIP-119 CTV template construction
@@ -105,19 +104,17 @@ tage/
 │   ├── yield_engine/
 │   │   ├── mod.rs               # Yield engine root
 │   │   ├── lending_pool.rs      # BTC lending / borrowing pool
-│   │   └── interest_rate.rs     # Utilisation-based rate curves
+│   │   ├── interest_rate.rs     # Utilisation-based rate curves
+│   │   └── daemon.rs            # Yield engine daemon (polls Bitcoin Core)
 │   ├── staking/
 │   │   ├── mod.rs               # Staking module root
 │   │   ├── validator.rs         # Validator registration and bonding
-│   │   └── slashing.rs          # Slashing conditions and execution
+│   │   ├── slashing.rs          # Slashing conditions and execution
+│   │   └── daemon.rs            # Validator daemon (distributes sequencing rewards)
 │   └── utils/
 │       ├── mod.rs               # Utils root
 │       ├── script.rs            # Bitcoin script encoding helpers
 │       └── hash.rs              # SHA-256d, RIPEMD-160, tagged hashes
-├── tests/
-│   ├── integration_bridge.rs
-│   ├── integration_covenant.rs
-│   └── integration_yield.rs
 ```
 
 ---
